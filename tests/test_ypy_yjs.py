@@ -1,13 +1,15 @@
 import asyncio
 
 import pytest
+from websockets import connect  # type: ignore
 from y_websocket import YDoc, WebsocketProvider
 
 
 @pytest.mark.asyncio
 async def test_ypy_yjs(echo_server, yjs_client):
     ydoc = YDoc()
-    WebsocketProvider("ws://localhost:1234", "my-roomname", ydoc)
+    websocket = await connect("ws://localhost:1234")
+    WebsocketProvider(ydoc, websocket)
     ymap = ydoc.get_map("map")
     # set a value in "in"
     for v_in in ["0", "1"]:
