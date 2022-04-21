@@ -2,7 +2,6 @@ import asyncio
 from types import TracebackType
 from typing import Any, Dict, Optional, Type
 
-from websockets import connect  # type: ignore
 import y_py as Y
 
 from .yutils import (
@@ -35,25 +34,19 @@ class WebsocketProvider:
 
     _update_queue: asyncio.Queue
     _ydoc: YDoc
-    _server_url: str
     _room: str
     _ws_opts: Dict[str, Any]
 
-    def __init__(
-        self, server_url: str, room: str, ydoc: YDoc, ws_opts: Dict[str, Any] = {}
-    ):
+    def __init__(self, ydoc: YDoc, websocket):
+        self._websocket = websocket
         self._update_queue = asyncio.Queue()
         ydoc._update_queue = self._update_queue
         self._ydoc = ydoc
-        self._server_url = server_url
-        self._room = room
-        self._ws_opts = ws_opts
         asyncio.create_task(self._run())
 
     async def _run(self):
         state = Y.encode_state_vector(self._ydoc)
         msg = create_sync_step1_message(state)
-        self._websocket = await connect(self._server_url, **self._ws_opts)
         await self._websocket.send(msg)
         self._send_task = asyncio.create_task(self._send())
         asyncio.create_task(self._recv())
