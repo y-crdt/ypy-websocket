@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install Miniconda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          mamba-version: "*"
+          channels: conda-forge
+          python-version: "3.7"
+      - name: Install dependencies
+        run: |
+          mamba install python=${{ matrix.python-version }} pip nodejs
+          pip install .[test]
+          npm --prefix tests i
+      - name: Check style and types
+        run: |
+          black --check y_websocket tests
+          flake8 y_websocket tests
+          mypy y_websocket tests
+      - name: Run tests
+        run: |
+          pytest -v
