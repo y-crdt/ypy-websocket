@@ -2,21 +2,13 @@ import subprocess
 
 import pytest
 from websockets import serve  # type: ignore
-
-
-CLIENTS = []
-
-
-async def echo(websocket):
-    CLIENTS.append(websocket)
-    async for message in websocket:
-        for client in [c for c in CLIENTS if c != websocket]:
-            await client.send(message)
+from y_websocket import WebsocketServer
 
 
 @pytest.fixture
 async def echo_server():
-    async with serve(echo, "localhost", 1234):
+    websocket_server = WebsocketServer()
+    async with serve(websocket_server.echo, "localhost", 1234):
         yield
 
 

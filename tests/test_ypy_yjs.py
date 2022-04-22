@@ -8,7 +8,7 @@ from y_websocket import YDoc, WebsocketProvider
 @pytest.mark.asyncio
 async def test_ypy_yjs(echo_server, yjs_client):
     ydoc = YDoc()
-    websocket = await connect("ws://localhost:1234")
+    websocket = await connect("ws://localhost:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
     ymap = ydoc.get_map("map")
     # set a value in "in"
