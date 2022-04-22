@@ -1,6 +1,6 @@
 import asyncio
 from types import TracebackType
-from typing import Any, Dict, Optional, Type
+from typing import Optional, Type
 
 import y_py as Y
 
@@ -34,14 +34,12 @@ class WebsocketProvider:
 
     _update_queue: asyncio.Queue
     _ydoc: YDoc
-    _room: str
-    _ws_opts: Dict[str, Any]
 
     def __init__(self, ydoc: YDoc, websocket):
+        self._ydoc = ydoc
         self._websocket = websocket
         self._update_queue = asyncio.Queue()
         ydoc._update_queue = self._update_queue
-        self._ydoc = ydoc
         asyncio.create_task(self._run())
 
     async def _run(self):
