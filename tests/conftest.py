@@ -8,7 +8,7 @@ from y_websocket import WebsocketServer
 @pytest.fixture
 async def echo_server():
     websocket_server = WebsocketServer()
-    async with serve(websocket_server.echo, "localhost", 1234):
+    async with serve(websocket_server.serve, "localhost", 1234):
         yield
 
 
