@@ -30,7 +30,7 @@ jobs:
         run: |
           mamba install python=${{ matrix.python-version }} pip nodejs
           pip install .[test]
-          npm --prefix tests i
+          cd tests; npm install
       - name: Check style and types
         run: |
           black --check y_websocket tests
