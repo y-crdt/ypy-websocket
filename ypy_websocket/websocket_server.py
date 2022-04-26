@@ -1,15 +1,7 @@
 import asyncio
 from typing import Dict, List, Optional
 
-import y_py as Y
-
-from .yutils import (
-    YMessageType,
-    create_sync_step1_message,
-    create_sync_step2_message,
-    get_message,
-)
-from .ydoc import YDoc
+from .ydoc import YDoc, process_message, publish_state
 
 
 class YRoom:
@@ -27,6 +19,8 @@ class YRoom:
 
 class WebsocketServer:
 
+    has_internal_ydoc: bool
+    auto_clean_rooms: bool
     rooms: Dict[str, YRoom]
 
     def __init__(self, has_internal_ydoc: bool = False, auto_clean_rooms: bool = True):
@@ -69,9 +63,7 @@ class WebsocketServer:
         room = self.get_room(websocket.path)
         room.clients.append(websocket)
         if room.ydoc is not None:
-            state = Y.encode_state_vector(room.ydoc)
-            msg = create_sync_step1_message(state)
-            await websocket.send(msg)
+            await publish_state(room.ydoc, websocket)
             send_task = asyncio.create_task(self._send(room.ydoc, room.clients))
         else:
             send_task = None
@@ -80,20 +72,7 @@ class WebsocketServer:
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
             if room.ydoc is not None:
-                if message[0] == YMessageType.SYNC:
-                    message_type = message[1]
-                    msg = message[2:]
-                    if message_type == YMessageType.SYNC_STEP1:
-                        state = get_message(msg)
-                        update = Y.encode_state_as_update(room.ydoc, state)
-                        reply = create_sync_step2_message(update)
-                        await websocket.send(reply)
-                    elif message_type in (
-                        YMessageType.SYNC_STEP2,
-                        YMessageType.SYNC_UPDATE,
-                    ):
-                        update = get_message(msg)
-                        Y.apply_update(room.ydoc, update)
+                await process_message(message, room.ydoc, websocket)
         if send_task is not None:
             send_task.cancel()
         # remove this client
@@ -106,4 +85,7 @@ class WebsocketServer:
             update = await ydoc._update_queue.get()
             # broadcast update to all clients
             for client in clients:
-                await client.send(update)
+                try:
+                    await client.send(update)
+                except Exception:
+                    pass
