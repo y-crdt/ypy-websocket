@@ -33,9 +33,9 @@ jobs:
           cd tests; npm install
       - name: Check style and types
         run: |
-          black --check y_websocket tests
-          flake8 y_websocket tests
-          mypy y_websocket tests
+          black --check ypy_websocket tests
+          flake8 ypy_websocket tests
+          mypy ypy_websocket tests
       - name: Run tests
         run: |
           pytest -v

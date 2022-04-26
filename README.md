@@ -1,10 +1,10 @@
-[![Build Status](https://github.com/davidbrochart/y-websocket/workflows/Tests/badge.svg)](https://github.com/davidbrochart/y-websocket/actions)
+[![Build Status](https://github.com/davidbrochart/ypy-websocket/workflows/Tests/badge.svg)](https://github.com/davidbrochart/ypy-websocket/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 
-# y-websocket
+# ypy-websocket
 
-y-websocket is an async WebSocket connector for Ypy.
+ypy-websocket is an async WebSocket connector for Ypy.
 
 ## Usage
 
@@ -15,7 +15,7 @@ Here is a code example:
 ```py
 import asyncio
 from websockets import connect
-from y_websocket import YDoc, WebsocketProvider
+from ypy_websocket import YDoc, WebsocketProvider
 
 async def client():
     ydoc = YDoc()
@@ -28,8 +28,8 @@ async def client():
 asyncio.run(client())
 ```
 
-Note that `YDoc` has to be imported from `y_websocket` instead of `y_py`. This will change in the
-future, when `y_py` has the necessary event handlers. `y_websocket.YDoc` is a subclass of
+Note that `YDoc` has to be imported from `ypy_websocket` instead of `y_py`. This will change in the
+future, when `y_py` has the necessary event handlers. `ypy_websocket.YDoc` is a subclass of
 `y_py.YDoc`.
 
 ### Server
@@ -39,7 +39,7 @@ Here is a code example:
 ```py
 import asyncio
 from websockets import serve
-from y_websocket import WebsocketServer
+from ypy_websocket import WebsocketServer
 
 async def server():
     websocket_server = WebsocketServer()

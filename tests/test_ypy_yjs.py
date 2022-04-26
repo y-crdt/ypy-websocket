@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from websockets import connect  # type: ignore
-from y_websocket import YDoc, WebsocketProvider
+from ypy_websocket import YDoc, WebsocketProvider
 
 
 @pytest.mark.asyncio

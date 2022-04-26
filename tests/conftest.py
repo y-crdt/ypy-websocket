@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 from websockets import serve  # type: ignore
-from y_websocket import WebsocketServer
+from ypy_websocket import WebsocketServer
 
 
 @pytest.fixture
