@@ -4,7 +4,13 @@ from typing import Optional, Type
 
 import y_py as Y
 
-from .yutils import create_update_message
+from .yutils import (
+    YMessageType,
+    create_sync_step1_message,
+    create_sync_step2_message,
+    create_update_message,
+    get_message,
+)
 
 
 class YDoc(Y.YDoc):
@@ -46,3 +52,26 @@ class Transaction:
         message = create_update_message(update)
         self.update_queue.put_nowait(message)
         return res
+
+
+async def process_message(message: bytes, ydoc: YDoc, websocket):
+    if message[0] == YMessageType.SYNC:
+        message_type = message[1]
+        msg = message[2:]
+        if message_type == YMessageType.SYNC_STEP1:
+            state = get_message(msg)
+            update = Y.encode_state_as_update(ydoc, state)
+            reply = create_sync_step2_message(update)
+            await websocket.send(reply)
+        elif message_type in (
+            YMessageType.SYNC_STEP2,
+            YMessageType.SYNC_UPDATE,
+        ):
+            update = get_message(msg)
+            Y.apply_update(ydoc, update)
+
+
+async def publish_state(ydoc: YDoc, websocket):
+    state = Y.encode_state_vector(ydoc)
+    msg = create_sync_step1_message(state)
+    await websocket.send(msg)
