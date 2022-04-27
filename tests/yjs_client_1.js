@@ -3,6 +3,7 @@ const WebsocketProvider = require('y-websocket').WebsocketProvider
 
 const doc = new Y.Doc()
 const ycells = doc.getArray("cells")
+const ystate = doc.getMap("state")
 const ws = require('ws')
 
 const wsProvider = new WebsocketProvider(
@@ -15,6 +16,10 @@ wsProvider.on('status', event => {
   console.log(event.status)
 })
 
-ycells.observe(ycellsEvent => {
-  console.log("change")
+ycells.observe(event => {
+  console.log("ycell changed")
+})
+
+ystate.observe(event => {
+  console.log("ystate changed")
 })

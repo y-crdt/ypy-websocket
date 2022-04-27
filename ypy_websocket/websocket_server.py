@@ -29,7 +29,7 @@ class WebsocketServer:
         self.rooms = {}
 
     def get_room(self, path: str) -> YRoom:
-        room = self.rooms.get(path, YRoom(self.has_internal_ydoc))
+        room = self.rooms.get(path, YRoom(has_internal_ydoc=self.has_internal_ydoc))
         self.rooms[path] = room
         return room
 
@@ -60,7 +60,7 @@ class WebsocketServer:
         del self.rooms[name]
 
     async def serve(self, websocket):
-        room = self.get_room(websocket.path)
+        room = self.get_room(websocket.path[1:])
         room.clients.append(websocket)
         if room.ydoc is not None:
             await publish_state(room.ydoc, websocket)

@@ -37,18 +37,20 @@ async def test_ypy_yjs_1(yws_server, yjs_client):
     # wait for the JS client to connect
     while True:
         await asyncio.sleep(0.1)
-        if "/my-roomname" in yws_server.rooms:
+        if "my-roomname" in yws_server.rooms:
             break
-    ydoc = yws_server.rooms["/my-roomname"].ydoc
+    ydoc = yws_server.rooms["my-roomname"].ydoc
     ycells = ydoc.get_array("cells")
-    cells = []
+    ystate = ydoc.get_map("state")
     for _ in range(3):
-        cell = {"source": "1 + 2"}
-        ycell = Y.YMap(cell)
-        cells.append(ycell)
-    with ydoc.begin_transaction() as t:
-        ycells.push(t, cells)
-    with ydoc.begin_transaction() as t:
-        ycells.delete(t, 0, len(cells))
-    with ydoc.begin_transaction() as t:
-        ycells.push(t, cells)
+        source = Y.YText("1 + 2")
+        cell = {"source": source, "metadata": {"foo": "bar"}}
+        cells = [Y.YMap(cell) for _ in range(3)]
+        with ydoc.begin_transaction() as t:
+            ycells.push(t, cells)
+            ystate.set(t, "state", {"dirty": False})
+        with ydoc.begin_transaction() as t:
+            ycells.delete(t, 0, len(cells))
+            for key in ystate:
+                ystate.delete(t, key)
+    await asyncio.sleep(0.5)
