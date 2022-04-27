@@ -15,10 +15,14 @@ from .yutils import (
 
 class YDoc(Y.YDoc):
 
+    initialized: asyncio.Event
+    synced: asyncio.Event
     _update_queue: asyncio.Queue
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.initialized = asyncio.Event()
+        self.synced = asyncio.Event()
         self._update_queue = asyncio.Queue()
 
     _begin_transaction = Y.YDoc.begin_transaction
@@ -37,7 +41,8 @@ class Transaction:
         self.update_queue = update_queue
 
     def __enter__(self):
-        self.state = Y.encode_state_vector(self.ydoc)
+        if self.ydoc.initialized.is_set():
+            self.state = Y.encode_state_vector(self.ydoc)
         self.transaction = self.ydoc._begin_transaction()
         return self.transaction.__enter__()
 
@@ -48,13 +53,15 @@ class Transaction:
         exc_tb: Optional[TracebackType],
     ):
         res = self.transaction.__exit__(exc_type, exc_value, exc_tb)
-        update = Y.encode_state_as_update(self.ydoc, self.state)
-        message = create_update_message(update)
-        self.update_queue.put_nowait(message)
+        if self.ydoc.initialized.is_set():
+            update = Y.encode_state_as_update(self.ydoc, self.state)
+            message = create_update_message(update)
+            self.update_queue.put_nowait(message)
         return res
 
 
 async def process_message(message: bytes, ydoc: YDoc, websocket):
+    await ydoc.initialized.wait()
     if message[0] == YMessageType.SYNC:
         message_type = message[1]
         msg = message[2:]
@@ -69,9 +76,12 @@ async def process_message(message: bytes, ydoc: YDoc, websocket):
         ):
             update = get_message(msg)
             Y.apply_update(ydoc, update)
+            if message_type == YMessageType.SYNC_STEP2:
+                ydoc.synced.set()
 
 
-async def publish_state(ydoc: YDoc, websocket):
+async def sync(ydoc: YDoc, websocket):
+    await ydoc.initialized.wait()
     state = Y.encode_state_vector(ydoc)
     msg = create_sync_step1_message(state)
     await websocket.send(msg)

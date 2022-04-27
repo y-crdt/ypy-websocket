@@ -6,14 +6,19 @@ from ypy_websocket import WebsocketServer
 
 
 @pytest.fixture
-async def echo_server():
-    websocket_server = WebsocketServer()
+async def yws_server(request):
+    try:
+        kwargs = request.param
+    except Exception:
+        kwargs = {}
+    websocket_server = WebsocketServer(**kwargs)
     async with serve(websocket_server.serve, "localhost", 1234):
-        yield
+        yield websocket_server
 
 
 @pytest.fixture
-def yjs_client():
-    p = subprocess.Popen(["node", "tests/yjs_client.js"])
+def yjs_client(request):
+    client_id = request.param
+    p = subprocess.Popen(["node", f"tests/yjs_client_{client_id}.js"])
     yield p
     p.kill()
