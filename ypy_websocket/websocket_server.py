@@ -1,7 +1,7 @@
 import asyncio
 from typing import Dict, List, Optional
 
-from .ydoc import YDoc, process_message, publish_state
+from .ydoc import YDoc, process_message, sync
 
 
 class YRoom:
@@ -36,9 +36,6 @@ class WebsocketServer:
     def get_room_name(self, room):
         return list(self.rooms.keys())[list(self.rooms.values()).index(room)]
 
-    def on_message(self, message):
-        pass
-
     def rename_room(
         self,
         to_name: str,
@@ -63,7 +60,7 @@ class WebsocketServer:
         room = self.get_room(websocket.path[1:])
         room.clients.append(websocket)
         if room.ydoc is not None:
-            await publish_state(room.ydoc, websocket)
+            await sync(room.ydoc, websocket)
             send_task = asyncio.create_task(self._send(room.ydoc, room.clients))
         else:
             send_task = None
@@ -71,6 +68,7 @@ class WebsocketServer:
             # forward messages to every other client
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
+            # update our internal state
             if room.ydoc is not None:
                 await process_message(message, room.ydoc, websocket)
         if send_task is not None:
@@ -81,9 +79,10 @@ class WebsocketServer:
             self.delete_room(room=room)
 
     async def _send(self, ydoc, clients):
+        await ydoc.synced.wait()
         while True:
             update = await ydoc._update_queue.get()
-            # broadcast update to all clients
+            # broadcast internal ydoc's update to all clients
             for client in clients:
                 try:
                     await client.send(update)

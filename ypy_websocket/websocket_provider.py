@@ -1,6 +1,6 @@
 import asyncio
 
-from .ydoc import YDoc, process_message, publish_state
+from .ydoc import YDoc, process_message, sync
 
 
 class WebsocketProvider:
@@ -8,12 +8,13 @@ class WebsocketProvider:
     _ydoc: YDoc
 
     def __init__(self, ydoc: YDoc, websocket):
+        ydoc.initialized.set()
         self._ydoc = ydoc
         self._websocket = websocket
         asyncio.create_task(self._run())
 
     async def _run(self):
-        await publish_state(self._ydoc, self._websocket)
+        await sync(self._ydoc, self._websocket)
         send_task = asyncio.create_task(self._send())
         async for message in self._websocket:
             await process_message(message, self._ydoc, self._websocket)
