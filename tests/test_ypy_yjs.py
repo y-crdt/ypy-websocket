@@ -2,11 +2,13 @@ import asyncio
 
 import pytest
 from websockets import connect  # type: ignore
+import y_py as Y
 from ypy_websocket import YDoc, WebsocketProvider
 
 
 @pytest.mark.asyncio
-async def test_ypy_yjs(echo_server, yjs_client):
+@pytest.mark.parametrize("yjs_client", "0", indirect=True)
+async def test_ypy_yjs_0(yws_server, yjs_client):
     ydoc = YDoc()
     websocket = await connect("ws://localhost:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
@@ -26,3 +28,27 @@ async def test_ypy_yjs(echo_server, yjs_client):
         await asyncio.wait_for(change.wait(), timeout=1)
         v_out = ymap["out"]
         assert v_out == v_in + "1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("yws_server", [{"has_internal_ydoc": True}], indirect=True)
+@pytest.mark.parametrize("yjs_client", "1", indirect=True)
+async def test_ypy_yjs_1(yws_server, yjs_client):
+    # wait for the JS client to connect
+    while True:
+        await asyncio.sleep(0.1)
+        if "/my-roomname" in yws_server.rooms:
+            break
+    ydoc = yws_server.rooms["/my-roomname"].ydoc
+    ycells = ydoc.get_array("cells")
+    cells = []
+    for _ in range(3):
+        cell = {"source": "1 + 2"}
+        ycell = Y.YMap(cell)
+        cells.append(ycell)
+    with ydoc.begin_transaction() as t:
+        ycells.push(t, cells)
+    with ydoc.begin_transaction() as t:
+        ycells.delete(t, 0, len(cells))
+    with ydoc.begin_transaction() as t:
+        ycells.push(t, cells)
