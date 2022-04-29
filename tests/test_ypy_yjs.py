@@ -55,3 +55,19 @@ async def test_ypy_yjs_1(yws_server, yjs_client):
             ycells.delete(t, 0, len(cells))
             for key in ystate:
                 ystate.delete(t, key)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("yjs_client", "2", indirect=True)
+async def test_ypy_yjs_2(yws_server, yjs_client):
+    ydoc = YDoc()
+    websocket = await connect("ws://localhost:1234/my-roomname")
+    WebsocketProvider(ydoc, websocket)
+    ytext = ydoc.get_text("text")
+    with ydoc.begin_transaction() as t:
+        ytext.push(t, "a")
+    with ydoc.begin_transaction() as t:
+        ytext.delete(t, 0, len(ytext))
+    with ydoc.begin_transaction() as t:
+        ytext.push(t, "")
+    await asyncio.sleep(0.3)

@@ -38,4 +38,4 @@ jobs:
           mypy ypy_websocket tests
       - name: Run tests
         run: |
-          pytest -v
+          pytest -v -s
