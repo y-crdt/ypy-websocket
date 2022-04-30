@@ -79,7 +79,6 @@ class WebsocketServer:
             self.delete_room(room=room)
 
     async def _send(self, ydoc, clients):
-        await ydoc.synced.wait()
         while True:
             update = await ydoc._update_queue.get()
             # broadcast internal ydoc's update to all clients

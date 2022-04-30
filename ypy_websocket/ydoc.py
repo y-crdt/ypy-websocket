@@ -41,7 +41,7 @@ class Transaction:
         self.update_queue = update_queue
 
     def __enter__(self):
-        if self.ydoc.initialized.is_set():
+        if self.ydoc.synced.is_set():
             self.state = Y.encode_state_vector(self.ydoc)
         self.transaction = self.ydoc._begin_transaction()
         return self.transaction.__enter__()
@@ -53,7 +53,7 @@ class Transaction:
         exc_tb: Optional[TracebackType],
     ):
         res = self.transaction.__exit__(exc_type, exc_value, exc_tb)
-        if self.ydoc.initialized.is_set():
+        if self.ydoc.synced.is_set():
             update = Y.encode_state_as_update(self.ydoc, self.state)
             message = create_update_message(update)
             self.update_queue.put_nowait(message)
@@ -61,9 +61,9 @@ class Transaction:
 
 
 async def process_message(message: bytes, ydoc: YDoc, websocket):
-    await ydoc.initialized.wait()
     if message[0] == YMessageType.SYNC:
         message_type = message[1]
+        print(f"{message_type=}")
         msg = message[2:]
         if message_type == YMessageType.SYNC_STEP1:
             state = get_message(msg)
@@ -85,3 +85,7 @@ async def sync(ydoc: YDoc, websocket):
     state = Y.encode_state_vector(ydoc)
     msg = create_sync_step1_message(state)
     await websocket.send(msg)
+    async for msg in websocket:
+        await process_message(msg, ydoc, websocket)
+        if ydoc.synced.is_set():
+            break

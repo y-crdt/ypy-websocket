@@ -8,6 +8,8 @@ class WebsocketProvider:
     _ydoc: YDoc
 
     def __init__(self, ydoc: YDoc, websocket):
+        # consider ydoc as already initialized since it's coming from outside
+        # (must be initialized before creating the websocket provider)
         ydoc.initialized.set()
         self._ydoc = ydoc
         self._websocket = websocket

@@ -18,7 +18,9 @@ wsProvider.on('status', event => {
 ymap.observe(ymapEvent => {
   ymapEvent.changes.keys.forEach((change, key) => {
     if (key === 'in') {
-      ymap.set('out', ymap.get('in') + '1')
+      doc.transact(() => {
+        ymap.set('out', ymap.get('in') + '1')
+      })
     }
   })
 })
