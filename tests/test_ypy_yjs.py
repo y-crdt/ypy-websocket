@@ -13,21 +13,20 @@ async def test_ypy_yjs_0(yws_server, yjs_client):
     websocket = await connect("ws://localhost:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
     ymap = ydoc.get_map("map")
-    # set a value in "in"
-    for v_in in ["0", "1"]:
-        with ydoc.begin_transaction() as t:
-            ymap.set(t, "in", v_in)
-        # wait for the JS client to return a value in "out"
-        change = asyncio.Event()
+    with ydoc.begin_transaction() as t:
+        ymap.set(t, "clock", 0)
+        ytext = Y.YText("")
+        ymap.set(t, "text", ytext)
+    # wait for a change on the JS side
+    change = asyncio.Event()
 
-        def callback(event):
-            if "out" in event.keys:
-                change.set()
+    def callback(event):
+        if "clock" in event.keys:
+            change.set()
 
-        ymap.observe(callback)
-        await asyncio.wait_for(change.wait(), timeout=1)
-        v_out = ymap["out"]
-        assert v_out == v_in + "1"
+    ymap.observe(callback)
+    await asyncio.wait_for(change.wait(), timeout=1)
+    assert str(ymap["text"]) == "i"
 
 
 @pytest.mark.skip(reason="FIXME: hangs")
