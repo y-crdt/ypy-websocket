@@ -48,3 +48,38 @@ async def server():
 
 asyncio.run(server())
 ```
+
+### WebSocket API
+
+The WebSocket object passed to `WebsocketProvider` and `WebsocketServer.serve` must respect the
+following API:
+
+```py
+class WebSocket:
+
+    @property
+    def path(self) -> str:
+        # can be e.g. the URL path
+        # or a room identifier
+        return "my-roomname"
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> bytes:
+        # async iterator for receiving messages
+        # until the connection is closed
+        try:
+            message = await self.recv()
+        except:
+            raise StopAsyncIteration()
+        return message
+
+    async def send(self, message: bytes):
+        # send message
+        pass
+
+    async def recv(self) -> bytes:
+        # receive message
+        return b""
+```
