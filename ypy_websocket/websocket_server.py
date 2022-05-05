@@ -67,7 +67,7 @@ class WebsocketServer:
         del self.rooms[name]
 
     async def serve(self, websocket):
-        room = self.get_room(websocket.path[1:])
+        room = self.get_room(websocket.path)
         room.clients.append(websocket)
         if room.ydoc is not None:
             await sync(room.ydoc, websocket)
