@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .ydoc import YDoc, process_message, sync
 
@@ -8,6 +8,7 @@ class YRoom:
 
     clients: List
     ydoc: Optional[YDoc]
+    _on_message: Optional[Callable]
 
     def __init__(self, has_internal_ydoc: bool = False):
         self.clients = []
@@ -15,6 +16,15 @@ class YRoom:
             self.ydoc = YDoc()
         else:
             self.ydoc = None
+        self._on_message = None
+
+    @property
+    def on_message(self) -> Optional[Callable]:
+        return self._on_message
+
+    @on_message.setter
+    def on_message(self, value: Optional[Callable]):
+        self._on_message = value
 
 
 class WebsocketServer:
@@ -65,6 +75,8 @@ class WebsocketServer:
         else:
             send_task = None
         async for message in websocket:
+            if room.on_message:
+                await room.on_message(message)
             # forward messages to every other client
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
