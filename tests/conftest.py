@@ -2,6 +2,7 @@ import subprocess
 
 import pytest
 from websockets import serve  # type: ignore
+
 from ypy_websocket import WebsocketServer
 
 
