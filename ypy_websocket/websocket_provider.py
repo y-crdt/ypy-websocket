@@ -8,7 +8,6 @@ class WebsocketProvider:
     _ydoc: YDoc
 
     def __init__(self, ydoc: YDoc, websocket):
-        ydoc.initialized.set()
         self._ydoc = ydoc
         self._websocket = websocket
         asyncio.create_task(self._run())
