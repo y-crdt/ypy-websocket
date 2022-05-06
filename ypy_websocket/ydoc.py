@@ -22,6 +22,7 @@ class YDoc(Y.YDoc):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.initialized = asyncio.Event()
+        self.initialized.set()
         self.synced = asyncio.Event()
         self._update_queue = asyncio.Queue()
 

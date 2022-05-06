@@ -7,16 +7,27 @@ from .ydoc import YDoc, process_message, sync
 class YRoom:
 
     clients: List
-    ydoc: Optional[YDoc]
+    ydoc: YDoc
     _on_message: Optional[Callable]
 
-    def __init__(self, has_internal_ydoc: bool = False):
+    def __init__(self, ready: bool = True):
+        self._ready = ready
         self.clients = []
-        if has_internal_ydoc:
-            self.ydoc = YDoc()
-        else:
-            self.ydoc = None
+        self.ydoc = YDoc()
+        if not ready:
+            self.ydoc.initialized.clear()
         self._on_message = None
+        self._broadcast_task = asyncio.create_task(self._broadcast_updates())
+
+    @property
+    def ready(self) -> bool:
+        return self._ready
+
+    @ready.setter
+    def ready(self, value: bool) -> None:
+        if value:
+            self._ready = True
+            self.ydoc.initialized.set()
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -26,22 +37,38 @@ class YRoom:
     def on_message(self, value: Optional[Callable]):
         self._on_message = value
 
+    async def _broadcast_updates(self):
+        try:
+            await self.ydoc.synced.wait()
+            while True:
+                update = await self.ydoc._update_queue.get()
+                # broadcast internal ydoc's update to all clients
+                for client in self.clients:
+                    try:
+                        await client.send(update)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def _clean(self):
+        self._broadcast_task.cancel()
+
 
 class WebsocketServer:
 
-    has_internal_ydoc: bool
     auto_clean_rooms: bool
     rooms: Dict[str, YRoom]
 
-    def __init__(self, has_internal_ydoc: bool = False, auto_clean_rooms: bool = True):
-        self.has_internal_ydoc = has_internal_ydoc
+    def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True):
+        self.rooms_ready = rooms_ready
         self.auto_clean_rooms = auto_clean_rooms
         self.rooms = {}
 
     def get_room(self, path: str) -> YRoom:
-        room = self.rooms.get(path, YRoom(has_internal_ydoc=self.has_internal_ydoc))
-        self.rooms[path] = room
-        return room
+        if path not in self.rooms.keys():
+            self.rooms[path] = YRoom(ready=self.rooms_ready)
+        return self.rooms[path]
 
     def get_room_name(self, room):
         return list(self.rooms.keys())[list(self.rooms.values()).index(room)]
@@ -60,16 +87,13 @@ class WebsocketServer:
             raise RuntimeError("Cannot pass name and room")
         if name is None:
             name = self.get_room_name(room)
+        self.rooms[name]._clean()
         del self.rooms[name]
 
     async def serve(self, websocket):
         room = self.get_room(websocket.path)
         room.clients.append(websocket)
-        if room.ydoc is not None:
-            await sync(room.ydoc, websocket)
-            send_task = asyncio.create_task(self._send(room.ydoc, room.clients))
-        else:
-            send_task = None
+        await sync(room.ydoc, websocket)
         async for message in websocket:
             if room.on_message:
                 await room.on_message(message)
@@ -77,22 +101,8 @@ class WebsocketServer:
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
             # update our internal state
-            if room.ydoc is not None:
-                await process_message(message, room.ydoc, websocket)
-        if send_task is not None:
-            send_task.cancel()
+            await process_message(message, room.ydoc, websocket)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
             self.delete_room(room=room)
-
-    async def _send(self, ydoc, clients):
-        await ydoc.synced.wait()
-        while True:
-            update = await ydoc._update_queue.get()
-            # broadcast internal ydoc's update to all clients
-            for client in clients:
-                try:
-                    await client.send(update)
-                except Exception:
-                    pass
