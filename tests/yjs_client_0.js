@@ -1,13 +1,14 @@
 const Y = require('yjs')
 const WebsocketProvider = require('y-websocket').WebsocketProvider
 
-const doc = new Y.Doc()
-const ymap = doc.getMap("map")
+const ydoc = new Y.Doc()
+const ytest = ydoc.getMap('_test')
+const ymap = ydoc.getMap('map')
 const ws = require('ws')
 
 const wsProvider = new WebsocketProvider(
   'ws://localhost:1234', 'my-roomname',
-  doc,
+  ydoc,
   { WebSocketPolyfill: ws }
 )
 
@@ -15,10 +16,17 @@ wsProvider.on('status', event => {
   console.log(event.status)
 })
 
-ymap.observe(ymapEvent => {
-  ymapEvent.changes.keys.forEach((change, key) => {
-    if (key === 'in') {
-      ymap.set('out', ymap.get('in') + '1')
+var clock = -1
+
+ytest.observe(event => {
+  event.changes.keys.forEach((change, key) => {
+    if (key === 'clock') {
+      const clk = ytest.get('clock')
+      if (clk > clock) {
+        ymap.set('out', ymap.get('in') + 1)
+        clock = clk + 1
+        ytest.set('clock', clock)
+      }
     }
   })
 })
