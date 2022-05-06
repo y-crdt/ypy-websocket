@@ -47,11 +47,7 @@ class WebsocketServer:
         return list(self.rooms.keys())[list(self.rooms.values()).index(room)]
 
     def rename_room(
-        self,
-        to_name: str,
-        *,
-        from_name: Optional[str] = None,
-        from_room: Optional[YRoom] = None
+        self, to_name: str, *, from_name: Optional[str] = None, from_room: Optional[YRoom] = None
     ):
         if from_name is not None and from_room is not None:
             raise RuntimeError("Cannot pass from_name and from_room")
