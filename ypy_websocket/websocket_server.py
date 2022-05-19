@@ -1,9 +1,11 @@
 import asyncio
-import os
-from io import BufferedWriter
 from typing import Callable, Dict, List, Optional
 
+import aiofiles  # type: ignore
+import y_py as Y
+
 from .ydoc import YDoc, process_message, sync
+from .yutils import get_messages, write_var_uint
 
 
 class YRoom:
@@ -11,7 +13,6 @@ class YRoom:
     clients: List
     ydoc: YDoc
     updates_file_path: Optional[str]
-    updates_file: Optional[BufferedWriter]
     _on_message: Optional[Callable]
 
     def __init__(self, ready: bool = True, updates_file_path: Optional[str] = None):
@@ -24,9 +25,7 @@ class YRoom:
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
         self.updates_file_path = updates_file_path
         if updates_file_path:
-            self.updates_file = open(updates_file_path + ".writing", "wb")
-        else:
-            self.updates_file = None
+            open(updates_file_path, "wb").close()
 
     @property
     def ready(self) -> bool:
@@ -63,6 +62,20 @@ class YRoom:
     def _clean(self):
         self._broadcast_task.cancel()
 
+    async def encode_state_as_update_to_file(self, path: Optional[str] = None):
+        path = path or self.updates_file_path
+        update = Y.encode_state_as_update(self.ydoc)  # type: ignore
+        async with aiofiles.open(path, "ab") as f:
+            var_len = write_var_uint(len(update))
+            await f.write(bytes(var_len + update))
+
+    async def apply_updates_from_file(self, path: Optional[str] = None):
+        path = path or self.updates_file_path
+        async with aiofiles.open(path, "rb") as f:
+            updates = await f.read()
+        for _, update in get_messages(updates):
+            Y.apply_update(self.ydoc, update)
+
 
 class WebsocketServer:
 
@@ -97,10 +110,6 @@ class WebsocketServer:
         if name is None:
             name = self.get_room_name(room)
         room = self.rooms[name]
-        if room.updates_file:
-            room.updates_file.close()
-            assert room.updates_file_path is not None
-            os.rename(room.updates_file_path + ".writing", room.updates_file_path)
         room._clean()
         del self.rooms[name]
 
@@ -116,9 +125,10 @@ class WebsocketServer:
                 await client.send(message)
             # update our internal state
             res = await process_message(message, room.ydoc, websocket)
-            if room.updates_file and res is not None:
+            if room.updates_file_path and res is not None:
                 var_len, update = res
-                room.updates_file.write(var_len + update)
+                async with aiofiles.open(room.updates_file_path, "ab") as f:
+                    await f.write(var_len + update)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
