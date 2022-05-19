@@ -9,7 +9,8 @@ from .yutils import (
     create_sync_step1_message,
     create_sync_step2_message,
     create_update_message,
-    get_message,
+    get_messages,
+    write_var_uint,
 )
 
 
@@ -67,18 +68,21 @@ async def process_message(message: bytes, ydoc: YDoc, websocket):
         message_type = message[1]
         msg = message[2:]
         if message_type == YMessageType.SYNC_STEP1:
-            state = get_message(msg)
+            _, state = next(get_messages(msg))
             update = Y.encode_state_as_update(ydoc, state)
             reply = create_sync_step2_message(update)
             await websocket.send(reply)
+            var_len = bytes(write_var_uint(len(update)))
+            return var_len, bytes(update)
         elif message_type in (
             YMessageType.SYNC_STEP2,
             YMessageType.SYNC_UPDATE,
         ):
-            update = get_message(msg)
+            var_len, update = next(get_messages(msg))
             Y.apply_update(ydoc, update)
             if message_type == YMessageType.SYNC_STEP2:
                 ydoc.synced.set()
+            return var_len, update
 
 
 async def sync(ydoc: YDoc, websocket):

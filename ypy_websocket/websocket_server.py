@@ -1,4 +1,6 @@
 import asyncio
+import os
+from io import BufferedWriter
 from typing import Callable, Dict, List, Optional
 
 from .ydoc import YDoc, process_message, sync
@@ -8,9 +10,11 @@ class YRoom:
 
     clients: List
     ydoc: YDoc
+    updates_file_path: Optional[str]
+    updates_file: Optional[BufferedWriter]
     _on_message: Optional[Callable]
 
-    def __init__(self, ready: bool = True):
+    def __init__(self, ready: bool = True, updates_file_path: Optional[str] = None):
         self._ready = ready
         self.clients = []
         self.ydoc = YDoc()
@@ -18,6 +22,11 @@ class YRoom:
             self.ydoc.initialized.clear()
         self._on_message = None
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
+        self.updates_file_path = updates_file_path
+        if updates_file_path:
+            self.updates_file = open(updates_file_path + ".writing", "wb")
+        else:
+            self.updates_file = None
 
     @property
     def ready(self) -> bool:
@@ -87,7 +96,12 @@ class WebsocketServer:
             raise RuntimeError("Cannot pass name and room")
         if name is None:
             name = self.get_room_name(room)
-        self.rooms[name]._clean()
+        room = self.rooms[name]
+        if room.updates_file:
+            room.updates_file.close()
+            assert room.updates_file_path is not None
+            os.rename(room.updates_file_path + ".writing", room.updates_file_path)
+        room._clean()
         del self.rooms[name]
 
     async def serve(self, websocket):
@@ -101,7 +115,10 @@ class WebsocketServer:
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
             # update our internal state
-            await process_message(message, room.ydoc, websocket)
+            res = await process_message(message, room.ydoc, websocket)
+            if room.updates_file and res is not None:
+                var_len, update = res
+                room.updates_file.write(var_len + update)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
