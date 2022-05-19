@@ -34,12 +34,30 @@ def create_update_message(data: List[int]) -> bytes:
     return create_message(data, YMessageType.SYNC_UPDATE)
 
 
-def get_message(message):
-    i = 0
+def get_messages(message):
+    length = len(message)
+    if not length:
+        return
+    i0 = 0
     while True:
-        byte = message[i]
-        i += 1
-        if byte < 128:
-            break
-    msg = message[i:]
-    return msg
+        msg_len = 0
+        i = 0
+        i2 = i0
+        while True:
+            byte = message[i0]
+            msg_len += (byte & 127) << i
+            i += 7
+            i0 += 1
+            length -= 1
+            if byte < 128:
+                break
+        var_len = message[i2:i0]
+        i1 = i0 + msg_len
+        msg = message[i0:i1]
+        length -= msg_len
+        yield var_len, msg
+        if length == 0:
+            return
+        if length < 0:
+            raise RuntimeError("Y protocol error")
+        i0 = i1
