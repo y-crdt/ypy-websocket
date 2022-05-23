@@ -1,31 +1,26 @@
 import asyncio
 from typing import Callable, Dict, List, Optional
 
-import aiofiles  # type: ignore
-import y_py as Y
-
 from .ydoc import YDoc, process_message, sync
-from .yutils import get_messages, write_var_uint
+from .ystore import BaseYStore
 
 
 class YRoom:
 
     clients: List
     ydoc: YDoc
-    updates_file_path: Optional[str]
+    ystore: Optional[BaseYStore]
     _on_message: Optional[Callable]
 
-    def __init__(self, ready: bool = True, updates_file_path: Optional[str] = None):
+    def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None):
         self._ready = ready
+        self.ystore = ystore
         self.clients = []
         self.ydoc = YDoc()
         if not ready:
             self.ydoc.initialized.clear()
         self._on_message = None
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
-        self.updates_file_path = updates_file_path
-        if updates_file_path:
-            open(updates_file_path, "wb").close()
 
     @property
     def ready(self) -> bool:
@@ -61,20 +56,6 @@ class YRoom:
 
     def _clean(self):
         self._broadcast_task.cancel()
-
-    async def encode_state_as_update_to_file(self, path: Optional[str] = None):
-        path = path or self.updates_file_path
-        update = Y.encode_state_as_update(self.ydoc)  # type: ignore
-        async with aiofiles.open(path, "ab") as f:
-            var_len = write_var_uint(len(update))
-            await f.write(bytes(var_len + update))
-
-    async def apply_updates_from_file(self, path: Optional[str] = None):
-        path = path or self.updates_file_path
-        async with aiofiles.open(path, "rb") as f:
-            updates = await f.read()
-        for _, update in get_messages(updates):
-            Y.apply_update(self.ydoc, update)
 
 
 class WebsocketServer:
@@ -125,10 +106,9 @@ class WebsocketServer:
                 await client.send(message)
             # update our internal state
             res = await process_message(message, room.ydoc, websocket)
-            if room.updates_file_path and res is not None:
+            if room.ystore and res:
                 var_len, update = res
-                async with aiofiles.open(room.updates_file_path, "ab") as f:
-                    await f.write(var_len + update)
+                await room.ystore.append(var_len + update)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
