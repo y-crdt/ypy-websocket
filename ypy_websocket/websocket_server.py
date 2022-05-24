@@ -105,10 +105,9 @@ class WebsocketServer:
             for client in [c for c in room.clients if c != websocket]:
                 await client.send(message)
             # update our internal state
-            res = await process_message(message, room.ydoc, websocket)
-            if room.ystore and res:
-                var_len, update = res
-                await room.ystore.append(var_len + update)
+            update = await process_message(message, room.ydoc, websocket)
+            if room.ystore and update:
+                await room.ystore.write(update)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:

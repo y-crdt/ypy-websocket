@@ -9,7 +9,7 @@ class YMessageType(IntEnum):
     SYNC_UPDATE = 2
 
 
-def write_var_uint(num):
+def write_var_uint(num: int) -> List[int]:
     res = []
     while num > 127:
         res += [128 | (127 & num)]
@@ -42,7 +42,6 @@ def get_messages(message):
     while True:
         msg_len = 0
         i = 0
-        i2 = i0
         while True:
             byte = message[i0]
             msg_len += (byte & 127) << i
@@ -51,13 +50,16 @@ def get_messages(message):
             length -= 1
             if byte < 128:
                 break
-        var_len = message[i2:i0]
         i1 = i0 + msg_len
         msg = message[i0:i1]
         length -= msg_len
-        yield var_len, msg
+        yield msg
         if length == 0:
             return
         if length < 0:
             raise RuntimeError("Y protocol error")
         i0 = i1
+
+
+def get_message(message):
+    return next(get_messages(message))
