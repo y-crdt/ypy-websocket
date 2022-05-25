@@ -10,6 +10,10 @@ import y_py as Y
 from .yutils import get_messages, write_var_uint
 
 
+class YDocNotFound(Exception):
+    pass
+
+
 class BaseYStore:
     def __init__(self, path: str):
         raise RuntimeError("Not implemented")
@@ -39,8 +43,11 @@ class FileYStore(BaseYStore):
         self.path = path
 
     async def read(self) -> AsyncIterator[bytes]:
-        async with aiofiles.open(self.path, "rb") as f:
-            data = await f.read()
+        try:
+            async with aiofiles.open(self.path, "rb") as f:
+                data = await f.read()
+        except Exception:
+            raise YDocNotFound
         for update in get_messages(data):
             yield update
 
@@ -106,11 +113,19 @@ class SQLiteYStore(BaseYStore):
         self.db_created.set()
 
     async def read(self) -> AsyncIterator[bytes]:
-        await self.db_created.wait()
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("SELECT * FROM yupdates WHERE path = ?", (self.path,)) as cursor:
-                async for _, update in cursor:
-                    yield update
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    "SELECT * FROM yupdates WHERE path = ?", (self.path,)
+                ) as cursor:
+                    found = False
+                    async for _, update in cursor:
+                        found = True
+                        yield update
+                    if not found:
+                        raise YDocNotFound
+        except Exception:
+            raise YDocNotFound
 
     async def write(self, data: bytes):
         await self.db_created.wait()
