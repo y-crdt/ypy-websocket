@@ -11,11 +11,8 @@ from .yutils import get_messages, write_var_uint
 
 
 class BaseYStore:
-    def init(self):
-        self.done_writing = asyncio.Event()
-        self.done_writing.set()
-        self.done_reading = asyncio.Event()
-        self.done_reading.set()
+    def __init__(self, path: str):
+        raise RuntimeError("Not implemented")
 
     async def write(self, data: bytes):
         raise RuntimeError("Not implemented")
@@ -26,17 +23,11 @@ class BaseYStore:
 
     async def encode_state_as_update(self, ydoc: Y.YDoc):
         update = Y.encode_state_as_update(ydoc)  # type: ignore
-        await self.done_reading.wait()
-        self.done_writing.clear()
         await self.write(bytes(update))
-        self.done_writing.set()
 
     async def apply_updates(self, ydoc: Y.YDoc):
-        await self.done_writing.wait()
-        self.done_reading.clear()
         async for update in self.read():
             Y.apply_update(ydoc, update)  # type: ignore
-        self.done_reading.set()
 
 
 class FileYStore(BaseYStore):
@@ -45,7 +36,6 @@ class FileYStore(BaseYStore):
     path: str
 
     def __init__(self, path: str):
-        super().init()
         self.path = path
 
     async def read(self) -> AsyncIterator[bytes]:
@@ -105,12 +95,11 @@ class SQLiteYStore(BaseYStore):
     db_created: asyncio.Event
 
     def __init__(self, path: str):
-        super().init()
         self.path = path
         self.db_created = asyncio.Event()
-        asyncio.create_task(self.create())
+        asyncio.create_task(self.create_db())
 
-    async def create(self):
+    async def create_db(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB)")
             await db.commit()
