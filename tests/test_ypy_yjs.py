@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-import y_py as Y
 from websockets import connect  # type: ignore
 
 from ypy_websocket import WebsocketProvider, YDoc
@@ -52,25 +51,23 @@ async def test_ypy_yjs_0(yws_server, yjs_client):
         assert v_out == v_in + 1.0
 
 
-@pytest.mark.skip(reason="FIXME: hangs")
 @pytest.mark.asyncio
-@pytest.mark.parametrize("yws_server", [{"has_internal_ydoc": True}], indirect=True)
 @pytest.mark.parametrize("yjs_client", "1", indirect=True)
 async def test_ypy_yjs_1(yws_server, yjs_client):
     # wait for the JS client to connect
+    tt, dt = 0, 0.1
     while True:
-        await asyncio.sleep(0.1)
-        if "my-roomname" in yws_server.rooms:
+        await asyncio.sleep(dt)
+        if "/my-roomname" in yws_server.rooms:
             break
-    ydoc = yws_server.rooms["my-roomname"].ydoc
+        tt += dt
+        if tt >= 1:
+            raise RuntimeError("Timeout waiting for client to connect")
+    ydoc = yws_server.rooms["/my-roomname"].ydoc
+    ytest = YTest(ydoc)
+    ytest.run_clock()
+    await ytest.clock_run()
     ycells = ydoc.get_array("cells")
     ystate = ydoc.get_map("state")
-    for _ in range(3):
-        cells = [Y.YMap({"source": Y.YText("1 + 2"), "metadata": {"foo": "bar"}}) for _ in range(3)]
-        with ydoc.begin_transaction() as t:
-            ycells.push(t, cells)
-            ystate.set(t, "state", {"dirty": False})
-        with ydoc.begin_transaction() as t:
-            ycells.delete(t, 0, len(cells))
-            for key in ystate:
-                ystate.delete(t, key)
+    assert ycells.to_json() == [{"metadata": {"foo": "bar"}, "source": "1 + 2"}]
+    assert ystate.to_json() == {"state": {"dirty": False}}
