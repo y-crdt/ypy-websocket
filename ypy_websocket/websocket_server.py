@@ -103,7 +103,12 @@ class WebsocketServer:
                 await room.on_message(message)
             # forward messages to every other client
             for client in [c for c in room.clients if c != websocket]:
-                await client.send(message)
+                # clients may have disconnected but not yet removed from the room
+                # ignore them and continue forwarding to other clients
+                try:
+                    await client.send(message)
+                except Exception:
+                    pass
             # update our internal state
             update = await process_message(message, room.ydoc, websocket)
             if room.ystore and update:
