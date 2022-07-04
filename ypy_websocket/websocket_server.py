@@ -1,24 +1,27 @@
 import asyncio
+from functools import partial
 from typing import Callable, Dict, List, Optional
 
-from .ydoc import YDoc, process_message, sync
+import y_py as Y
+
 from .ystore import BaseYStore
+from .yutils import process_message, put_updates, sync
 
 
 class YRoom:
 
     clients: List
-    ydoc: YDoc
+    ydoc: Y.YDoc
     ystore: Optional[BaseYStore]
     _on_message: Optional[Callable]
+    _update_queue: asyncio.Queue
 
     def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None):
-        self._ready = ready
+        self.ydoc = Y.YDoc()
+        self._update_queue = asyncio.Queue()
+        self.ready = ready
         self.ystore = ystore
         self.clients = []
-        self.ydoc = YDoc()
-        if not ready:
-            self.ydoc.initialized.clear()
         self._on_message = None
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
 
@@ -28,9 +31,9 @@ class YRoom:
 
     @ready.setter
     def ready(self, value: bool) -> None:
+        self._ready = value
         if value:
-            self._ready = True
-            self.ydoc.initialized.set()
+            self.ydoc.observe_after_transaction(partial(put_updates, self._update_queue, self.ydoc))
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -42,9 +45,8 @@ class YRoom:
 
     async def _broadcast_updates(self):
         try:
-            await self.ydoc.synced.wait()
             while True:
-                update = await self.ydoc._update_queue.get()
+                update = await self._update_queue.get()
                 # broadcast internal ydoc's update to all clients
                 for client in self.clients:
                     try:

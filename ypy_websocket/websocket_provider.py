@@ -1,15 +1,21 @@
 import asyncio
+from functools import partial
 
-from .ydoc import YDoc, process_message, sync
+import y_py as Y
+
+from .yutils import process_message, put_updates, sync
 
 
 class WebsocketProvider:
 
-    _ydoc: YDoc
+    _ydoc: Y.YDoc
+    _update_queue: asyncio.Queue
 
-    def __init__(self, ydoc: YDoc, websocket):
+    def __init__(self, ydoc: Y.YDoc, websocket):
         self._ydoc = ydoc
         self._websocket = websocket
+        self._update_queue = asyncio.Queue()
+        ydoc.observe_after_transaction(partial(put_updates, self._update_queue, ydoc))
         asyncio.create_task(self._run())
 
     async def _run(self):
@@ -21,7 +27,7 @@ class WebsocketProvider:
 
     async def _send(self):
         while True:
-            update = await self._ydoc._update_queue.get()
+            update = await self._update_queue.get()
             try:
                 await self._websocket.send(update)
             except Exception:

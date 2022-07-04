@@ -1,13 +1,14 @@
 import asyncio
 
 import pytest
+import y_py as Y
 from websockets import connect  # type: ignore
 
-from ypy_websocket import WebsocketProvider, YDoc
+from ypy_websocket import WebsocketProvider
 
 
 class YTest:
-    def __init__(self, ydoc: YDoc, timeout: float = 1.0):
+    def __init__(self, ydoc: Y.YDoc, timeout: float = 1.0):
         self.ydoc = ydoc
         self.timeout = timeout
         self.ytest = ydoc.get_map("_test")
@@ -36,7 +37,7 @@ class YTest:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("yjs_client", "0", indirect=True)
 async def test_ypy_yjs_0(yws_server, yjs_client):
-    ydoc = YDoc()
+    ydoc = Y.YDoc()
     ytest = YTest(ydoc)
     websocket = await connect("ws://localhost:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
