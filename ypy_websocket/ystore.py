@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 from pathlib import Path
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Callable, Optional, Tuple
 
 import aiofiles  # type: ignore
 import aiosqlite  # type: ignore
@@ -15,22 +15,29 @@ class YDocNotFound(Exception):
 
 
 class BaseYStore:
-    def __init__(self, path: str):
+
+    metadata_callback: Optional[Callable] = None
+
+    def __init__(self, path: str, metadata_callback=None):
         raise RuntimeError("Not implemented")
 
-    async def write(self, data: bytes):
+    async def write(self, data: bytes) -> None:
         raise RuntimeError("Not implemented")
 
-    async def read(self) -> AsyncIterator[bytes]:
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
         raise RuntimeError("Not implemented")
-        yield b""
+        yield b"", b""
+
+    async def get_metadata(self) -> bytes:
+        metadata = b"" if not self.metadata_callback else await self.metadata_callback()
+        return metadata
 
     async def encode_state_as_update(self, ydoc: Y.YDoc):
         update = Y.encode_state_as_update(ydoc)  # type: ignore
-        await self.write(bytes(update))
+        await self.write(update)
 
     async def apply_updates(self, ydoc: Y.YDoc):
-        async for update in self.read():
+        async for update, metadata in self.read():
             Y.apply_update(ydoc, update)  # type: ignore
 
 
@@ -39,20 +46,25 @@ class FileYStore(BaseYStore):
 
     path: str
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, metadata_callback=None):
         self.path = path
+        self.metadata_callback = metadata_callback
 
-    async def read(self) -> AsyncIterator[bytes]:
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
         try:
             async with aiofiles.open(self.path, "rb") as f:
                 data = await f.read()
         except Exception:
             raise YDocNotFound
-        for update in get_messages(data):
-            yield update
+        is_data = True
+        for d in get_messages(data):
+            if is_data:
+                update = d
+            else:
+                yield update, d
+            is_data = not is_data
 
-    async def write(self, data: bytes):
-        var_len = bytes(write_var_uint(len(data)))
+    async def write(self, data: bytes) -> None:
         parent = Path(self.path).parent
         if not parent.exists():
             parent.mkdir(parents=True)
@@ -60,7 +72,11 @@ class FileYStore(BaseYStore):
         else:
             mode = "ab"
         async with aiofiles.open(self.path, mode) as f:
-            await f.write(var_len + data)
+            data_len = write_var_uint(len(data))
+            await f.write(data_len + data)
+            metadata = await self.get_metadata()
+            metadata_len = write_var_uint(len(metadata))
+            await f.write(metadata_len + metadata)
 
 
 class TempFileYStore(FileYStore):
@@ -72,21 +88,20 @@ class TempFileYStore(FileYStore):
     """
 
     prefix_dir: Optional[str] = None
-    _base_dir: Optional[str] = None
+    base_dir: Optional[str] = None
 
-    def __init__(self, path: str):
-        full_path = str(Path(self.base_dir) / path)
-        super().__init__(full_path)
+    def __init__(self, path: str, metadata_callback=None):
+        full_path = str(Path(self.get_base_dir()) / path)
+        super().__init__(full_path, metadata_callback=metadata_callback)
 
-    @property
-    def base_dir(self) -> str:
-        if self._base_dir is None:
+    def get_base_dir(self) -> str:
+        if self.base_dir is None:
             self.make_directory()
-        assert self._base_dir is not None
-        return self._base_dir
+        assert self.base_dir is not None
+        return self.base_dir
 
     def make_directory(self):
-        type(self)._base_dir = tempfile.mkdtemp(prefix=self.prefix_dir)
+        type(self).base_dir = tempfile.mkdtemp(prefix=self.prefix_dir)
 
 
 class SQLiteYStore(BaseYStore):
@@ -101,8 +116,9 @@ class SQLiteYStore(BaseYStore):
     path: str
     db_created: asyncio.Event
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, metadata_callback=None):
         self.path = path
+        self.metadata_callback = metadata_callback
         self.db_created = asyncio.Event()
         asyncio.create_task(self.create_db())
 
@@ -112,23 +128,30 @@ class SQLiteYStore(BaseYStore):
             await db.commit()
         self.db_created.set()
 
-    async def read(self) -> AsyncIterator[bytes]:
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(
                     "SELECT * FROM yupdates WHERE path = ?", (self.path,)
                 ) as cursor:
                     found = False
-                    async for _, update in cursor:
+                    is_data = True
+                    async for _, d in cursor:
                         found = True
-                        yield update
+                        if is_data:
+                            update = d
+                        else:
+                            yield update, d
+                        is_data = not is_data
                     if not found:
                         raise YDocNotFound
         except Exception:
             raise YDocNotFound
 
-    async def write(self, data: bytes):
+    async def write(self, data: bytes) -> None:
         await self.db_created.wait()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("INSERT INTO yupdates VALUES (?, ?)", (self.path, data))
+            metadata = await self.get_metadata()
+            await db.execute("INSERT INTO yupdates VALUES (?, ?)", (self.path, metadata))
             await db.commit()

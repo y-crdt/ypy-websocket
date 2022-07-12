@@ -55,7 +55,7 @@ class Transaction:
     ):
         res = self.transaction.__exit__(exc_type, exc_value, exc_tb)
         if self.ydoc.initialized.is_set():
-            update = Y.encode_state_as_update(self.ydoc, self.state)
+            update = bytes(Y.encode_state_as_update(self.ydoc, self.state))
             message = create_update_message(update)
             self.update_queue.put_nowait(message)
         return res
@@ -68,7 +68,7 @@ async def process_message(message: bytes, ydoc: YDoc, websocket):
         msg = message[2:]
         if message_type == YMessageType.SYNC_STEP1:
             state = get_message(msg)
-            update = Y.encode_state_as_update(ydoc, state)
+            update = bytes(Y.encode_state_as_update(ydoc, state))
             reply = create_sync_step2_message(update)
             await websocket.send(reply)
         elif message_type in (
@@ -84,6 +84,6 @@ async def process_message(message: bytes, ydoc: YDoc, websocket):
 
 async def sync(ydoc: YDoc, websocket):
     await ydoc.initialized.wait()
-    state = Y.encode_state_vector(ydoc)
+    state = bytes(Y.encode_state_vector(ydoc))
     msg = create_sync_step1_message(state)
     await websocket.send(msg)
