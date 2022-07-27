@@ -14,11 +14,12 @@ Here is a code example:
 
 ```py
 import asyncio
+import y_py as Y
 from websockets import connect
-from ypy_websocket import YDoc, WebsocketProvider
+from ypy_websocket import WebsocketProvider
 
 async def client():
-    ydoc = YDoc()
+    ydoc = Y.YDoc()
     websocket = await connect("ws://localhost:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
     ymap = ydoc.get_map("map")
@@ -27,10 +28,6 @@ async def client():
 
 asyncio.run(client())
 ```
-
-Note that `YDoc` has to be imported from `ypy_websocket` instead of `y_py`. This will change in the
-future, when `y_py` has the necessary event handlers. `ypy_websocket.YDoc` is a subclass of
-`y_py.YDoc`.
 
 ### Server
 
