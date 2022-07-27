@@ -1,4 +1,7 @@
+import asyncio
 from enum import IntEnum
+
+import y_py as Y
 
 
 class YMessageType(IntEnum):
@@ -62,3 +65,32 @@ def get_messages(message):
 
 def get_message(message):
     return next(get_messages(message))
+
+
+def put_updates(update_queue: asyncio.Queue, ydoc: Y.YDoc, event: Y.AfterTransactionEvent) -> None:
+    message = create_update_message(event.get_update())
+    update_queue.put_nowait(message)
+
+
+async def process_message(message: bytes, ydoc: Y.YDoc, websocket):
+    if message[0] == YMessageType.SYNC:
+        message_type = message[1]
+        msg = message[2:]
+        if message_type == YMessageType.SYNC_STEP1:
+            state = get_message(msg)
+            update = Y.encode_state_as_update(ydoc, state)
+            reply = create_sync_step2_message(update)
+            await websocket.send(reply)
+        elif message_type in (
+            YMessageType.SYNC_STEP2,
+            YMessageType.SYNC_UPDATE,
+        ):
+            update = get_message(msg)
+            Y.apply_update(ydoc, update)
+            return update
+
+
+async def sync(ydoc: Y.YDoc, websocket):
+    state = Y.encode_state_vector(ydoc)
+    msg = create_sync_step1_message(state)
+    await websocket.send(msg)
