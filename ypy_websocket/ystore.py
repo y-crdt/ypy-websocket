@@ -7,7 +7,7 @@ import aiofiles  # type: ignore
 import aiosqlite  # type: ignore
 import y_py as Y
 
-from .yutils import get_messages, write_var_uint
+from .yutils import Decoder, write_var_uint
 
 
 class YDocNotFound(Exception):
@@ -57,7 +57,7 @@ class FileYStore(BaseYStore):
         except Exception:
             raise YDocNotFound
         is_data = True
-        for d in get_messages(data):
+        for d in Decoder(data).read_messages():
             if is_data:
                 update = d
             else:
