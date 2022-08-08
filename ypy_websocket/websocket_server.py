@@ -4,6 +4,7 @@ from typing import Callable, Dict, List, Optional
 
 import y_py as Y
 
+from .awareness import Awareness
 from .ystore import BaseYStore
 from .yutils import process_message, put_updates, sync
 
@@ -18,6 +19,7 @@ class YRoom:
 
     def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None):
         self.ydoc = Y.YDoc()
+        self.awareness = Awareness(self.ydoc)
         self._update_queue = asyncio.Queue()
         self.ready = ready
         self.ystore = ystore
@@ -101,8 +103,12 @@ class WebsocketServer:
         room.clients.append(websocket)
         await sync(room.ydoc, websocket)
         async for message in websocket:
+            # filter messages (e.g. awareness)
+            skip = False
             if room.on_message:
-                await room.on_message(message)
+                skip = await room.on_message(message)
+            if skip:
+                continue
             # forward messages to every other client
             for client in [c for c in room.clients if c != websocket]:
                 # clients may have disconnected but not yet removed from the room
