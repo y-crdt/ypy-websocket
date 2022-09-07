@@ -20,11 +20,11 @@ from ypy_websocket import WebsocketProvider
 
 async def client():
     ydoc = Y.YDoc()
-    websocket = await connect("ws://localhost:1234/my-roomname")
-    WebsocketProvider(ydoc, websocket)
-    ymap = ydoc.get_map("map")
-    with ydoc.begin_transaction() as t:
-        ymap.set(t, "key", "value")
+    async with connect("ws://localhost:1234/my-roomname") as websocket:
+        WebsocketProvider(ydoc, websocket)
+        ymap = ydoc.get_map("map")
+        with ydoc.begin_transaction() as t:
+            ymap.set(t, "key", "value")
 
 asyncio.run(client())
 ```
