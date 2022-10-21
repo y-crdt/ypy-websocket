@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ypy-websocket"
+dynamic = ["version"]
+description = "WebSocket connector for Ypy"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.7"
+authors = [
+    { name = "David Brochart", email = "david.brochart@gmail.com" },
+]
+keywords = [
+    "websocket",
+    "yjs",
+]
+dependencies = [
+    "aiofiles >=0.8.0,<1",
+    "aiosqlite >=0.17.0,<1",
+    "y-py >=0.5.3,<0.6.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "mypy",
+    "pre-commit",
+    "pytest",
+    "pytest-asyncio",
+    "websockets >=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/y-crdt/ypy-websocket"
+
+[tool.hatch.version]
+path = "ypy_websocket/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/ypy_websocket",
+]
+
+[tool.flake8]
+ignore = "E501, W503, E402"
+exclude = [
+    ".github",
+]
+enable-extensions = "G"
+extend-ignore = [
+    "G001", "G002", "G004", "G200", "G201", "G202",
+    # black adds spaces around ':'
+    "E203",
+]
