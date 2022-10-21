@@ -41,3 +41,15 @@ path = "ypy_websocket/__init__.py"
 include = [
     "/ypy_websocket",
 ]
+
+[tool.flake8]
+ignore = "E501, W503, E402"
+exclude = [
+    ".github",
+]
+enable-extensions = "G"
+extend-ignore = [
+    "G001", "G002", "G004", "G200", "G201", "G202",
+    # black adds spaces around ':'
+    "E203",
+]
