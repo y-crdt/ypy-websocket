@@ -120,7 +120,8 @@ class WebsocketServer:
             # update our internal state
             update = await process_message(message, room.ydoc, websocket)
             if room.ystore and update:
-                await room.ystore.write(update)
+                # update the Y store in the background to prevent slow filesystems from slowing down the server
+                asyncio.create_task(room.ystore.write(update))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
