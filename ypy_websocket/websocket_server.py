@@ -6,7 +6,7 @@ import y_py as Y
 
 from .awareness import Awareness
 from .ystore import BaseYStore
-from .yutils import process_message, put_updates, sync
+from .yutils import put_updates, sync, update
 
 
 class YRoom:
@@ -109,19 +109,11 @@ class WebsocketServer:
                 skip = await room.on_message(message)
             if skip:
                 continue
-            # forward messages to every other client
+            # update our internal state and the YStore (if any)
+            asyncio.create_task(update(message, room, websocket))
+            # forward messages to every other client in the background
             for client in [c for c in room.clients if c != websocket]:
-                # clients may have disconnected but not yet removed from the room
-                # ignore them and continue forwarding to other clients
-                try:
-                    await client.send(message)
-                except Exception:
-                    pass
-            # update our internal state
-            update = await process_message(message, room.ydoc, websocket)
-            if room.ystore and update:
-                # update the Y store in the background to prevent slow filesystems from slowing down the server
-                asyncio.create_task(room.ystore.write(update))
+                asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:

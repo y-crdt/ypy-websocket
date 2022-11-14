@@ -117,3 +117,9 @@ async def sync(ydoc: Y.YDoc, websocket):
     state = Y.encode_state_vector(ydoc)
     msg = create_sync_step1_message(state)
     await websocket.send(msg)
+
+
+async def update(message, room, websocket):
+    yupdate = await process_message(message, room.ydoc, websocket)
+    if room.ystore and yupdate:
+        await room.ystore.write(yupdate)
