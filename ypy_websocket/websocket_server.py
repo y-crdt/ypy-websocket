@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from functools import partial
 from typing import Callable, Dict, List, Optional
 
@@ -6,7 +7,7 @@ import y_py as Y
 
 from .awareness import Awareness
 from .ystore import BaseYStore
-from .yutils import process_message, put_updates, sync
+from .yutils import put_updates, sync, update
 
 
 class YRoom:
@@ -67,9 +68,10 @@ class WebsocketServer:
     auto_clean_rooms: bool
     rooms: Dict[str, YRoom]
 
-    def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True):
+    def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True, log=None):
         self.rooms_ready = rooms_ready
         self.auto_clean_rooms = auto_clean_rooms
+        self.log = log or logging.getLogger(__name__)
         self.rooms = {}
 
     def get_room(self, path: str) -> YRoom:
@@ -109,18 +111,12 @@ class WebsocketServer:
                 skip = await room.on_message(message)
             if skip:
                 continue
-            # forward messages to every other client
+            # update our internal state and the YStore (if any)
+            asyncio.create_task(update(message, room, websocket, self.log))
+            # forward messages to every other client in the background
             for client in [c for c in room.clients if c != websocket]:
-                # clients may have disconnected but not yet removed from the room
-                # ignore them and continue forwarding to other clients
-                try:
-                    await client.send(message)
-                except Exception:
-                    pass
-            # update our internal state
-            update = await process_message(message, room.ydoc, websocket)
-            if room.ystore and update:
-                await room.ystore.write(update)
+                self.log.debug("Sending Y update to client with endpoint: %s", client.path)
+                asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
