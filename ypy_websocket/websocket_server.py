@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from functools import partial
 from typing import Callable, Dict, List, Optional
 
@@ -67,9 +68,10 @@ class WebsocketServer:
     auto_clean_rooms: bool
     rooms: Dict[str, YRoom]
 
-    def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True):
+    def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True, log=None):
         self.rooms_ready = rooms_ready
         self.auto_clean_rooms = auto_clean_rooms
+        self.log = log or logging
         self.rooms = {}
 
     def get_room(self, path: str) -> YRoom:
@@ -110,9 +112,10 @@ class WebsocketServer:
             if skip:
                 continue
             # update our internal state and the YStore (if any)
-            asyncio.create_task(update(message, room, websocket))
+            asyncio.create_task(update(message, room, websocket, self.log))
             # forward messages to every other client in the background
             for client in [c for c in room.clients if c != websocket]:
+                self.log.debug("Sending Y update to client with endpoint: %s", client.path)
                 asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]

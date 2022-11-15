@@ -7,9 +7,27 @@ import y_py as Y
 
 class YMessageType(IntEnum):
     SYNC = 0
+    AWARENESS = 1
+
+    def raw_str(self) -> str:
+        if self == YMessageType.SYNC:
+            return "SYNC"
+        else:
+            return "AWARENESS"
+
+
+class YSyncMessageType(IntEnum):
     SYNC_STEP1 = 0
     SYNC_STEP2 = 1
     SYNC_UPDATE = 2
+
+    def raw_str(self) -> str:
+        if self == YSyncMessageType.SYNC_STEP1:
+            return "SYNC_STEP1"
+        elif self == YSyncMessageType.SYNC_STEP2:
+            return "SYNC_STEP2"
+        else:
+            return "SYNC_UPDATE"
 
 
 def write_var_uint(num: int) -> bytes:
@@ -26,15 +44,15 @@ def create_message(data: bytes, msg_type: int) -> bytes:
 
 
 def create_sync_step1_message(data: bytes) -> bytes:
-    return create_message(data, YMessageType.SYNC_STEP1)
+    return create_message(data, YSyncMessageType.SYNC_STEP1)
 
 
 def create_sync_step2_message(data: bytes) -> bytes:
-    return create_message(data, YMessageType.SYNC_STEP2)
+    return create_message(data, YSyncMessageType.SYNC_STEP2)
 
 
 def create_update_message(data: bytes) -> bytes:
-    return create_message(data, YMessageType.SYNC_UPDATE)
+    return create_message(data, YSyncMessageType.SYNC_UPDATE)
 
 
 def read_message(stream: bytes) -> bytes:
@@ -95,22 +113,40 @@ def put_updates(update_queue: asyncio.Queue, ydoc: Y.YDoc, event: Y.AfterTransac
     update_queue.put_nowait(message)
 
 
-async def process_message(message: bytes, ydoc: Y.YDoc, websocket):
-    if message[0] == YMessageType.SYNC:
+async def process_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> Optional[bytes]:
+    message_type = message[0]
+    log.debug(
+        "Received %s message from endpoint: %s",
+        YMessageType(message_type).raw_str(),
+        websocket.path,
+    )
+    if message_type == YMessageType.SYNC:
         message_type = message[1]
         msg = message[2:]
-        if message_type == YMessageType.SYNC_STEP1:
+        log.debug(
+            "Received %s message from endpoint: %s",
+            YSyncMessageType(message_type).raw_str(),
+            websocket.path,
+        )
+        if message_type == YSyncMessageType.SYNC_STEP1:
             state = read_message(msg)
             update = Y.encode_state_as_update(ydoc, state)
             reply = create_sync_step2_message(update)
+            log.debug(
+                "Sending %s message to endpoint: %s",
+                YSyncMessageType.SYNC_STEP2.raw_str(),
+                websocket.path,
+            )
             await websocket.send(reply)
         elif message_type in (
-            YMessageType.SYNC_STEP2,
-            YMessageType.SYNC_UPDATE,
+            YSyncMessageType.SYNC_STEP2,
+            YSyncMessageType.SYNC_UPDATE,
         ):
             update = read_message(msg)
             Y.apply_update(ydoc, update)
             return update
+
+    return None
 
 
 async def sync(ydoc: Y.YDoc, websocket):
@@ -119,7 +155,8 @@ async def sync(ydoc: Y.YDoc, websocket):
     await websocket.send(msg)
 
 
-async def update(message, room, websocket):
-    yupdate = await process_message(message, room.ydoc, websocket)
+async def update(message, room, websocket, log):
+    yupdate = await process_message(message, room.ydoc, websocket, log)
     if room.ystore and yupdate:
+        log.debug("Writing Y update to YStore from endpoint: %s", websocket.path)
         await room.ystore.write(yupdate)
