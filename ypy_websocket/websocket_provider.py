@@ -15,7 +15,7 @@ class WebsocketProvider:
     def __init__(self, ydoc: Y.YDoc, websocket, log=None):
         self._ydoc = ydoc
         self._websocket = websocket
-        self.log = log or logging
+        self.log = log or logging.getLogger(__name__)
         self._update_queue = asyncio.Queue()
         ydoc.observe_after_transaction(partial(put_updates, self._update_queue, ydoc))
         asyncio.create_task(self._run())

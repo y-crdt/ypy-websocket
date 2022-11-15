@@ -71,7 +71,7 @@ class WebsocketServer:
     def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True, log=None):
         self.rooms_ready = rooms_ready
         self.auto_clean_rooms = auto_clean_rooms
-        self.log = log or logging
+        self.log = log or logging.getLogger(__name__)
         self.rooms = {}
 
     def get_room(self, path: str) -> YRoom:

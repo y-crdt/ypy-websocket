@@ -10,10 +10,7 @@ class YMessageType(IntEnum):
     AWARENESS = 1
 
     def raw_str(self) -> str:
-        if self == YMessageType.SYNC:
-            return "SYNC"
-        else:
-            return "AWARENESS"
+        return self.name
 
 
 class YSyncMessageType(IntEnum):
@@ -22,12 +19,7 @@ class YSyncMessageType(IntEnum):
     SYNC_UPDATE = 2
 
     def raw_str(self) -> str:
-        if self == YSyncMessageType.SYNC_STEP1:
-            return "SYNC_STEP1"
-        elif self == YSyncMessageType.SYNC_STEP2:
-            return "SYNC_STEP2"
-        else:
-            return "SYNC_UPDATE"
+        return self.name
 
 
 def write_var_uint(num: int) -> bytes:
