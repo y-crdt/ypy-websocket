@@ -24,6 +24,14 @@ class YDoc(Y.YDoc):
     def begin_transaction(self):
         return Transaction(self, self._update_queue, self._ready)
 
+    @property
+    def ready(self) -> bool:
+        return self._ready
+
+    @ready.setter
+    def ready(self, value: bool) -> None:
+        self._ready = value
+
 
 class Transaction:
 

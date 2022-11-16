@@ -38,7 +38,7 @@ class YRoom:
     def ready(self, value: bool) -> None:
         self._ready = value
         if value:
-            self.ydoc._ready = True
+            self.ydoc.ready = True
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -114,8 +114,11 @@ class WebsocketServer:
             asyncio.create_task(update(message, room, websocket, self.log))
             # forward messages from this client to every other client in the background
             for client in [c for c in room.clients if c != websocket]:
-                self.log.debug("Sending Y update from client with endpoint: %s", websocket.path)
-                self.log.debug("... to client with endpoint: %s", client.path)
+                self.log.debug(
+                    "Sending Y update from client with endpoint %s to client with endpoint: %s",
+                    websocket.path,
+                    client.path,
+                )
                 asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
