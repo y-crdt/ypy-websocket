@@ -1,29 +1,31 @@
 import asyncio
 import logging
-from functools import partial
 from typing import Callable, Dict, List, Optional
 
-import y_py as Y
-
 from .awareness import Awareness
+from .ydoc import YDoc
 from .ystore import BaseYStore
-from .yutils import put_updates, sync, update
+from .yutils import sync, update
 
 
 class YRoom:
 
     clients: List
-    ydoc: Y.YDoc
+    ydoc: YDoc
     ystore: Optional[BaseYStore]
     _on_message: Optional[Callable]
     _update_queue: asyncio.Queue
+    _ready: bool
 
-    def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None):
-        self.ydoc = Y.YDoc()
-        self.awareness = Awareness(self.ydoc)
+    def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None, log=None):
         self._update_queue = asyncio.Queue()
+        self.ydoc = YDoc()
+        self.ydoc.init(self._update_queue)  # FIXME: overriding Y.YDoc.__init__ doesn't seem to work
+        self.awareness = Awareness(self.ydoc)
+        self._ready = False
         self.ready = ready
         self.ystore = ystore
+        self.log = log or logging.getLogger(__name__)
         self.clients = []
         self._on_message = None
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
@@ -36,7 +38,7 @@ class YRoom:
     def ready(self, value: bool) -> None:
         self._ready = value
         if value:
-            self.ydoc.observe_after_transaction(partial(put_updates, self._update_queue, self.ydoc))
+            self.ydoc._ready = True
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -47,17 +49,14 @@ class YRoom:
         self._on_message = value
 
     async def _broadcast_updates(self):
-        try:
-            while True:
-                update = await self._update_queue.get()
-                # broadcast internal ydoc's update to all clients
-                for client in self.clients:
-                    try:
-                        await client.send(update)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+        while True:
+            update = await self._update_queue.get()
+            # broadcast internal ydoc's update made from the backend to all clients
+            for client in self.clients:
+                self.log.debug(
+                    "Sending Y update from backend to client with endpoint: %s", client.path
+                )
+                asyncio.create_task(client.send(update))
 
     def _clean(self):
         self._broadcast_task.cancel()
@@ -76,7 +75,7 @@ class WebsocketServer:
 
     def get_room(self, path: str) -> YRoom:
         if path not in self.rooms.keys():
-            self.rooms[path] = YRoom(ready=self.rooms_ready)
+            self.rooms[path] = YRoom(ready=self.rooms_ready, log=self.log)
         return self.rooms[path]
 
     def get_room_name(self, room):
@@ -113,9 +112,10 @@ class WebsocketServer:
                 continue
             # update our internal state and the YStore (if any)
             asyncio.create_task(update(message, room, websocket, self.log))
-            # forward messages to every other client in the background
+            # forward messages from this client to every other client in the background
             for client in [c for c in room.clients if c != websocket]:
-                self.log.debug("Sending Y update to client with endpoint: %s", client.path)
+                self.log.debug("Sending Y update from client with endpoint: %s", websocket.path)
+                self.log.debug("... to client with endpoint: %s", client.path)
                 asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]

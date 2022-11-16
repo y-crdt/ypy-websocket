@@ -38,7 +38,8 @@ class Awareness:
                     if client_id == self.client_id and self.states.get(client_id) is not None:
                         clock += 1
                     else:
-                        del self.states[client_id]
+                        if client_id in self.states:
+                            del self.states[client_id]
                 else:
                     self.states[client_id] = state
                 self.meta[client_id] = {

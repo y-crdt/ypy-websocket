@@ -1,5 +1,6 @@
 import asyncio
 import tempfile
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional, Tuple
 
@@ -14,19 +15,21 @@ class YDocNotFound(Exception):
     pass
 
 
-class BaseYStore:
+class BaseYStore(ABC):
 
     metadata_callback: Optional[Callable] = None
 
+    @abstractmethod
     def __init__(self, path: str, metadata_callback=None):
-        raise RuntimeError("Not implemented")
+        ...
 
+    @abstractmethod
     async def write(self, data: bytes) -> None:
-        raise RuntimeError("Not implemented")
+        ...
 
+    @abstractmethod
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
-        raise RuntimeError("Not implemented")
-        yield b"", b""
+        ...
 
     async def get_metadata(self) -> bytes:
         metadata = b"" if not self.metadata_callback else await self.metadata_callback()
@@ -37,30 +40,35 @@ class BaseYStore:
         await self.write(update)
 
     async def apply_updates(self, ydoc: Y.YDoc):
-        async for update, metadata in self.read():
+        async for update, metadata in await self.read():
             Y.apply_update(ydoc, update)  # type: ignore
 
 
 class FileYStore(BaseYStore):
-    """A YStore which uses the local file system."""
+    """A YStore which uses one file per document."""
 
     path: str
+    metadata_callback: Optional[Callable]
+    lock: asyncio.Lock
 
-    def __init__(self, path: str, metadata_callback=None):
+    def __init__(self, path: str, metadata_callback: Optional[Callable] = None):
         self.path = path
         self.metadata_callback = metadata_callback
+        self.lock = asyncio.Lock()
 
-    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
-        try:
-            async with aiofiles.open(self.path, "rb") as f:
-                data = await f.read()
-        except Exception:
-            raise YDocNotFound
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:  # type: ignore
+        async with self.lock:
+            try:
+                async with aiofiles.open(self.path, "rb") as f:
+                    data = await f.read()
+            except BaseException:
+                raise YDocNotFound
         is_data = True
         for d in Decoder(data).read_messages():
             if is_data:
                 update = d
             else:
+                # yield data and metadata
                 yield update, d
             is_data = not is_data
 
@@ -71,16 +79,18 @@ class FileYStore(BaseYStore):
             mode = "wb"
         else:
             mode = "ab"
-        async with aiofiles.open(self.path, mode) as f:
-            data_len = write_var_uint(len(data))
-            await f.write(data_len + data)
-            metadata = await self.get_metadata()
-            metadata_len = write_var_uint(len(metadata))
-            await f.write(metadata_len + metadata)
+        async with self.lock:
+            async with aiofiles.open(self.path, mode) as f:
+                data_len = write_var_uint(len(data))
+                await f.write(data_len + data)
+                metadata = await self.get_metadata()
+                metadata_len = write_var_uint(len(metadata))
+                await f.write(metadata_len + metadata)
 
 
 class TempFileYStore(FileYStore):
     """A YStore which uses the system's temporary directory.
+    Files are writen under a common directory.
     To prefix the directory name (e.g. /tmp/my_prefix_b4whmm7y/):
 
     class PrefixTempFileYStore(TempFileYStore):
@@ -90,7 +100,7 @@ class TempFileYStore(FileYStore):
     prefix_dir: Optional[str] = None
     base_dir: Optional[str] = None
 
-    def __init__(self, path: str, metadata_callback=None):
+    def __init__(self, path: str, metadata_callback: Optional[Callable] = None):
         full_path = str(Path(self.get_base_dir()) / path)
         super().__init__(full_path, metadata_callback=metadata_callback)
 
@@ -106,6 +116,8 @@ class TempFileYStore(FileYStore):
 
 class SQLiteYStore(BaseYStore):
     """A YStore which uses an SQLite database.
+    Unlike file-based YStores, the Y updates of all documents are stored in the same database.
+
     Subclass to point to your database file:
 
     class MySQLiteYStore(SQLiteYStore):
@@ -116,7 +128,7 @@ class SQLiteYStore(BaseYStore):
     path: str
     db_created: asyncio.Event
 
-    def __init__(self, path: str, metadata_callback=None):
+    def __init__(self, path: str, metadata_callback: Optional[Callable] = None):
         self.path = path
         self.metadata_callback = metadata_callback
         self.db_created = asyncio.Event()
@@ -124,34 +136,31 @@ class SQLiteYStore(BaseYStore):
 
     async def create_db(self):
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB)")
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB, metadata BLOB)"
+            )
             await db.commit()
         self.db_created.set()
 
-    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:  # type: ignore
+        await self.db_created.wait()
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(
-                    "SELECT * FROM yupdates WHERE path = ?", (self.path,)
+                    "SELECT yupdate, metadata FROM yupdates WHERE path = ?", (self.path,)
                 ) as cursor:
                     found = False
-                    is_data = True
-                    async for _, d in cursor:
+                    async for update, metadata in cursor:
                         found = True
-                        if is_data:
-                            update = d
-                        else:
-                            yield update, d
-                        is_data = not is_data
+                        yield update, metadata
                     if not found:
                         raise YDocNotFound
-        except Exception:
+        except BaseException:
             raise YDocNotFound
 
     async def write(self, data: bytes) -> None:
         await self.db_created.wait()
+        metadata = await self.get_metadata()
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("INSERT INTO yupdates VALUES (?, ?)", (self.path, data))
-            metadata = await self.get_metadata()
-            await db.execute("INSERT INTO yupdates VALUES (?, ?)", (self.path, metadata))
+            await db.execute("INSERT INTO yupdates VALUES (?, ?, ?)", (self.path, data, metadata))
             await db.commit()
