@@ -40,7 +40,7 @@ class BaseYStore(ABC):
         await self.write(update)
 
     async def apply_updates(self, ydoc: Y.YDoc):
-        async for update, metadata in await self.read():
+        async for update, metadata in self.read():  # type: ignore
             Y.apply_update(ydoc, update)  # type: ignore
 
 
