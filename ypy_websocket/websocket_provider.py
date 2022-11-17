@@ -4,7 +4,13 @@ from functools import partial
 
 import y_py as Y
 
-from .yutils import YMessageType, process_sync_message, put_updates, sync
+from .yutils import (
+    YMessageType,
+    create_update_message,
+    process_sync_message,
+    put_updates,
+    sync,
+)
 
 
 class WebsocketProvider:
@@ -31,7 +37,8 @@ class WebsocketProvider:
     async def _send(self):
         while True:
             update = await self._update_queue.get()
+            message = create_update_message(update)
             try:
-                await self._websocket.send(update)
+                await self._websocket.send(message)
             except Exception:
                 pass
