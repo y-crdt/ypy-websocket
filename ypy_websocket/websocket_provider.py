@@ -4,7 +4,7 @@ from functools import partial
 
 import y_py as Y
 
-from .yutils import process_message, put_updates, sync
+from .yutils import YMessageType, process_sync_message, put_updates, sync
 
 
 class WebsocketProvider:
@@ -24,7 +24,8 @@ class WebsocketProvider:
         await sync(self._ydoc, self._websocket)
         send_task = asyncio.create_task(self._send())
         async for message in self._websocket:
-            await process_message(message, self._ydoc, self._websocket, self.log)
+            if message[0] == YMessageType.SYNC:
+                await process_sync_message(message[1:], self._ydoc, self._websocket, self.log)
         send_task.cancel()
 
     async def _send(self):

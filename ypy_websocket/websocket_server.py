@@ -1,27 +1,34 @@
 import asyncio
 import logging
+from functools import partial
 from typing import Callable, Dict, List, Optional
 
+import y_py as Y
+
 from .awareness import Awareness
-from .ydoc import YDoc
 from .ystore import BaseYStore
-from .yutils import sync, update
+from .yutils import (
+    YMessageType,
+    create_update_message,
+    process_sync_message,
+    put_updates,
+    sync,
+)
 
 
 class YRoom:
 
     clients: List
-    ydoc: YDoc
+    ydoc: Y.YDoc
     ystore: Optional[BaseYStore]
     _on_message: Optional[Callable]
     _update_queue: asyncio.Queue
     _ready: bool
 
     def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None, log=None):
-        self._update_queue = asyncio.Queue()
-        self.ydoc = YDoc()
-        self.ydoc.init(self._update_queue)  # FIXME: overriding Y.YDoc.__init__ doesn't seem to work
+        self.ydoc = Y.YDoc()
         self.awareness = Awareness(self.ydoc)
+        self._update_queue = asyncio.Queue()
         self._ready = False
         self.ready = ready
         self.ystore = ystore
@@ -38,7 +45,7 @@ class YRoom:
     def ready(self, value: bool) -> None:
         self._ready = value
         if value:
-            self.ydoc.ready = True
+            self.ydoc.observe_after_transaction(partial(put_updates, self._update_queue, self.ydoc))
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -51,12 +58,15 @@ class YRoom:
     async def _broadcast_updates(self):
         while True:
             update = await self._update_queue.get()
-            # broadcast internal ydoc's update made from the backend to all clients
+            # broadcast internal ydoc's update to all clients, that includes changes from the
+            # clients and changes from the backend (out-of-band changes)
             for client in self.clients:
-                self.log.debug(
-                    "Sending Y update from backend to client with endpoint: %s", client.path
-                )
-                asyncio.create_task(client.send(update))
+                self.log.debug("Sending Y update to client with endpoint: %s", client.path)
+                message = create_update_message(update)
+                asyncio.create_task(client.send(message))
+            if self.ystore:
+                self.log.debug("Writing Y update to YStore")
+                asyncio.create_task(self.ystore.write(update))
 
     def _clean(self):
         self._broadcast_task.cancel()
@@ -110,16 +120,29 @@ class WebsocketServer:
                 skip = await room.on_message(message)
             if skip:
                 continue
-            # update our internal state and the YStore (if any)
-            asyncio.create_task(update(message, room, websocket, self.log))
-            # forward messages from this client to every other client in the background
-            for client in [c for c in room.clients if c != websocket]:
-                self.log.debug(
-                    "Sending Y update from client with endpoint %s to client with endpoint: %s",
-                    websocket.path,
-                    client.path,
+            message_type = message[0]
+            if message_type == YMessageType.SYNC:
+                # update our internal state in the background
+                # changes to the internal state are then forwarded to all clients
+                # and stored in the YStore (if any)
+                asyncio.create_task(
+                    process_sync_message(message[1:], room.ydoc, websocket, self.log)
                 )
-                asyncio.create_task(client.send(message))
+            elif message_type == YMessageType.AWARENESS:
+                # forward awareness messages from this client to all clients,
+                # including itself, because it's used to keep the connection alive
+                self.log.debug(
+                    "Received %s message from endpoint: %s",
+                    YMessageType.AWARENESS.raw_str(),
+                    websocket.path,
+                )
+                for client in room.clients:
+                    self.log.debug(
+                        "Sending Y awareness from client with endpoint %s to client with endpoint: %s",
+                        websocket.path,
+                        client.path,
+                    )
+                    asyncio.create_task(client.send(message))
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:

@@ -101,54 +101,36 @@ class Decoder:
 
 
 def put_updates(update_queue: asyncio.Queue, ydoc: Y.YDoc, event: Y.AfterTransactionEvent) -> None:
-    message = create_update_message(event.get_update())
-    update_queue.put_nowait(message)
+    update_queue.put_nowait(event.get_update())
 
 
-async def process_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> Optional[bytes]:
+async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> None:
     message_type = message[0]
+    msg = message[1:]
     log.debug(
         "Received %s message from endpoint: %s",
-        YMessageType(message_type).raw_str(),
+        YSyncMessageType(message_type).raw_str(),
         websocket.path,
     )
-    if message_type == YMessageType.SYNC:
-        message_type = message[1]
-        msg = message[2:]
+    if message_type == YSyncMessageType.SYNC_STEP1:
+        state = read_message(msg)
+        update = Y.encode_state_as_update(ydoc, state)
+        reply = create_sync_step2_message(update)
         log.debug(
-            "Received %s message from endpoint: %s",
-            YSyncMessageType(message_type).raw_str(),
+            "Sending %s message to endpoint: %s",
+            YSyncMessageType.SYNC_STEP2.raw_str(),
             websocket.path,
         )
-        if message_type == YSyncMessageType.SYNC_STEP1:
-            state = read_message(msg)
-            update = Y.encode_state_as_update(ydoc, state)
-            reply = create_sync_step2_message(update)
-            log.debug(
-                "Sending %s message to endpoint: %s",
-                YSyncMessageType.SYNC_STEP2.raw_str(),
-                websocket.path,
-            )
-            await websocket.send(reply)
-        elif message_type in (
-            YSyncMessageType.SYNC_STEP2,
-            YSyncMessageType.SYNC_UPDATE,
-        ):
-            update = read_message(msg)
-            Y.apply_update(ydoc, update)
-            return update
-
-    return None
+        await websocket.send(reply)
+    elif message_type in (
+        YSyncMessageType.SYNC_STEP2,
+        YSyncMessageType.SYNC_UPDATE,
+    ):
+        update = read_message(msg)
+        Y.apply_update(ydoc, update)
 
 
 async def sync(ydoc: Y.YDoc, websocket):
     state = Y.encode_state_vector(ydoc)
     msg = create_sync_step1_message(state)
     await websocket.send(msg)
-
-
-async def update(message, room, websocket, log):
-    yupdate = await process_message(message, room.ydoc, websocket, log)
-    if room.ystore and yupdate:
-        log.debug("Writing Y update to YStore from endpoint: %s", websocket.path)
-        await room.ystore.write(yupdate)
