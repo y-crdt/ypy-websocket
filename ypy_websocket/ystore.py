@@ -1,6 +1,7 @@
 import asyncio
 import tempfile
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional, Tuple
 
@@ -137,7 +138,7 @@ class SQLiteYStore(BaseYStore):
     async def create_db(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB, metadata BLOB)"
+                "CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB, metadata BLOB, timestamp TEXT)"
             )
             await db.commit()
         self.db_created.set()
@@ -162,5 +163,8 @@ class SQLiteYStore(BaseYStore):
         await self.db_created.wait()
         metadata = await self.get_metadata()
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("INSERT INTO yupdates VALUES (?, ?, ?)", (self.path, data, metadata))
+            await db.execute(
+                "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
+                (self.path, data, metadata, datetime.utcnow()),
+            )
             await db.commit()
