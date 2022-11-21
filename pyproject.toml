@@ -17,7 +17,7 @@ keywords = [
     "yjs",
 ]
 dependencies = [
-    "aiofiles >=0.8.0,<1",
+    "aiofiles >=22.1.0,<23",
     "aiosqlite >=0.17.0,<1",
     "y-py >=0.5.3,<0.6.0",
 ]

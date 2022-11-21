@@ -1,7 +1,9 @@
 import asyncio
 from enum import IntEnum
+from pathlib import Path
 from typing import Optional
 
+import aiofiles.os  # type: ignore
 import y_py as Y
 
 
@@ -133,3 +135,17 @@ async def sync(ydoc: Y.YDoc, websocket, log):
         websocket.path,
     )
     await websocket.send(msg)
+
+
+async def get_new_path(path: str) -> str:
+    p = Path(path)
+    ext = p.suffix
+    p_noext = p.with_suffix("")
+    i = 1
+    dir_list = await aiofiles.os.listdir()
+    while True:
+        new_path = f"{p_noext}({i}){ext}"
+        if new_path not in dir_list:
+            break
+        i += 1
+    return str(new_path)
