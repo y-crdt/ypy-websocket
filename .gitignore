@@ -131,4 +131,3 @@ dmypy.json
 # test JS dependencies
 tests/node_modules
 tests/package-lock.json
-tests/yarn.lock
