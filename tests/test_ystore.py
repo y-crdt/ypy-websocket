@@ -1,11 +1,11 @@
 import asyncio
-import aiosqlite
+import os
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
-import time
-import os
 
+import aiosqlite
 import pytest
 
 from ypy_websocket.ystore import SQLiteYStore, TempFileYStore
@@ -52,6 +52,7 @@ async def test_file_ystore(YStore):
         assert m == bytes(i)  # metadata
         i += 1
 
+
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore():
     store_name = "my_store"
@@ -59,7 +60,7 @@ async def test_document_ttl_sqlite_ystore():
 
     await ystore.write(b"a")
     async with aiosqlite.connect(ystore.db_path) as db:
-        assert (await (await db.execute('SELECT count(*) FROM yupdates')).fetchone())[0] == 1
+        assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 1
 
     now = time.time()
 
@@ -68,11 +69,11 @@ async def test_document_ttl_sqlite_ystore():
         mock_time.return_value = now
         await ystore.write(b"b")
         async with aiosqlite.connect(ystore.db_path) as db:
-            assert (await (await db.execute('SELECT count(*) FROM yupdates')).fetchone())[0] == 2
+            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
 
     # assert that adding a record after document TTL deletes previous document history
     with patch("time.time") as mock_time:
         mock_time.return_value = now + ystore.document_ttl + 1000
         await ystore.write(b"c")
         async with aiosqlite.connect(ystore.db_path) as db:
-            assert (await (await db.execute('SELECT count(*) FROM yupdates')).fetchone())[0] == 1
+            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 1

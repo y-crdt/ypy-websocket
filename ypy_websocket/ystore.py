@@ -173,7 +173,7 @@ class SQLiteYStore(BaseYStore):
             # first, determine time elapsed since last update
             cursor = await db.execute(
                 "SELECT timestamp FROM yupdates WHERE path = ? ORDER BY timestamp DESC LIMIT 1",
-                (self.path,)
+                (self.path,),
             )
             row = await cursor.fetchone()
             diff = (time.time() - row[0]) if row else 0
