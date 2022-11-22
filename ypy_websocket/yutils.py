@@ -9,17 +9,11 @@ class YMessageType(IntEnum):
     SYNC = 0
     AWARENESS = 1
 
-    def raw_str(self) -> str:
-        return self.name
-
 
 class YSyncMessageType(IntEnum):
     SYNC_STEP1 = 0
     SYNC_STEP2 = 1
     SYNC_UPDATE = 2
-
-    def raw_str(self) -> str:
-        return self.name
 
 
 def write_var_uint(num: int) -> bytes:
@@ -109,7 +103,7 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
     msg = message[1:]
     log.debug(
         "Received %s message from endpoint: %s",
-        YSyncMessageType(message_type).raw_str(),
+        YSyncMessageType(message_type).name,
         websocket.path,
     )
     if message_type == YSyncMessageType.SYNC_STEP1:
@@ -118,7 +112,7 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
         reply = create_sync_step2_message(update)
         log.debug(
             "Sending %s message to endpoint: %s",
-            YSyncMessageType.SYNC_STEP2.raw_str(),
+            YSyncMessageType.SYNC_STEP2.name,
             websocket.path,
         )
         await websocket.send(reply)
@@ -130,7 +124,12 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
         Y.apply_update(ydoc, update)
 
 
-async def sync(ydoc: Y.YDoc, websocket):
+async def sync(ydoc: Y.YDoc, websocket, log):
     state = Y.encode_state_vector(ydoc)
     msg = create_sync_step1_message(state)
+    log.debug(
+        "Sending %s message to endpoint: %s",
+        YSyncMessageType.SYNC_STEP1.name,
+        websocket.path,
+    )
     await websocket.send(msg)

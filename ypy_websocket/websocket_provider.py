@@ -27,7 +27,7 @@ class WebsocketProvider:
         asyncio.create_task(self._run())
 
     async def _run(self):
-        await sync(self._ydoc, self._websocket)
+        await sync(self._ydoc, self._websocket, self.log)
         send_task = asyncio.create_task(self._send())
         async for message in self._websocket:
             if message[0] == YMessageType.SYNC:
