@@ -112,7 +112,7 @@ class WebsocketServer:
     async def serve(self, websocket):
         room = self.get_room(websocket.path)
         room.clients.append(websocket)
-        await sync(room.ydoc, websocket)
+        await sync(room.ydoc, websocket, self.log)
         async for message in websocket:
             # filter messages (e.g. awareness)
             skip = False
@@ -133,7 +133,7 @@ class WebsocketServer:
                 # including itself, because it's used to keep the connection alive
                 self.log.debug(
                     "Received %s message from endpoint: %s",
-                    YMessageType.AWARENESS.raw_str(),
+                    YMessageType.AWARENESS.name,
                     websocket.path,
                 )
                 for client in room.clients:
