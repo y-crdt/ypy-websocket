@@ -1,4 +1,6 @@
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 from websockets import serve  # type: ignore
@@ -23,3 +25,7 @@ def yjs_client(request):
     p = subprocess.Popen(["node", f"tests/yjs_client_{client_id}.js"])
     yield p
     p.kill()
+
+@pytest.fixture
+def yjs_sqlite_db_path():
+    return str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "ystore.db")

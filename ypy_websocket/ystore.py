@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
+import time
 from abc import ABC, abstractmethod
-from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional, Tuple
 
@@ -126,6 +126,10 @@ class SQLiteYStore(BaseYStore):
     """
 
     db_path: str = "ystore.db"
+    # Determines the "time to live" for all documents, i.e. how recent the
+    # latest update of a document must be before purging document history.
+    # Defaults to 1 day.
+    document_ttl: int = 24 * 60 * 60
     path: str
     db_created: asyncio.Event
 
@@ -138,7 +142,10 @@ class SQLiteYStore(BaseYStore):
     async def create_db(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "CREATE TABLE IF NOT EXISTS yupdates (path TEXT, yupdate BLOB, metadata BLOB, timestamp TEXT)"
+                "CREATE TABLE IF NOT EXISTS yupdates (path TEXT NOT NULL, yupdate BLOB, metadata BLOB, timestamp REAL NOT NULL)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_yupdates_path_timestamp ON yupdates (path, timestamp)"
             )
             await db.commit()
         self.db_created.set()
@@ -163,8 +170,21 @@ class SQLiteYStore(BaseYStore):
         await self.db_created.wait()
         metadata = await self.get_metadata()
         async with aiosqlite.connect(self.db_path) as db:
+            # first, determine time elapsed since last update
+            cursor = await db.execute(
+                "SELECT timestamp FROM yupdates WHERE path = ? ORDER BY timestamp DESC LIMIT 1",
+                (self.path,)
+            )
+            row = await cursor.fetchone()
+            diff = (time.time() - row[0]) if row else 0
+
+            # if diff > document_ttl, delete document history
+            if diff > self.document_ttl:
+                await db.execute("DELETE FROM yupdates WHERE path = ?", (self.path,))
+
+            # finally, write this update to the DB
             await db.execute(
                 "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
-                (self.path, data, metadata, datetime.utcnow()),
+                (self.path, data, metadata, time.time()),
             )
             await db.commit()
