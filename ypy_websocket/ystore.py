@@ -224,7 +224,6 @@ class SQLiteYStore(BaseYStore):
             raise YDocNotFound
 
     async def write(self, data: bytes) -> None:
-        metadata = await self.get_metadata()
         await self.db_initialized
         async with aiosqlite.connect(self.db_path) as db:
             # first, determine time elapsed since last update
@@ -235,11 +234,26 @@ class SQLiteYStore(BaseYStore):
             row = await cursor.fetchone()
             diff = (time.time() - row[0]) if row else 0
 
-            # if diff > document_ttl, delete document history
             if diff > self.document_ttl:
+                # squash updates
+                ydoc = Y.YDoc()
+                async with db.execute(
+                    "SELECT yupdate FROM yupdates WHERE path = ?", (self.path,)
+                ) as cursor:
+                    async for update, in cursor:
+                        Y.apply_update(ydoc, update)
+                # delete history
                 await db.execute("DELETE FROM yupdates WHERE path = ?", (self.path,))
+                # insert squashed updates
+                squashed_update = Y.encode_state_as_update(ydoc)
+                metadata = await self.get_metadata()
+                await db.execute(
+                    "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
+                    (self.path, squashed_update, metadata, time.time()),
+                )
 
             # finally, write this update to the DB
+            metadata = await self.get_metadata()
             await db.execute(
                 "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
                 (self.path, data, metadata, time.time()),
