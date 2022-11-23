@@ -59,29 +59,28 @@ async def test_ystore(YStore):
 
 
 @pytest.mark.asyncio
-async def test_document_ttl_sqlite_ystore():
+async def test_document_ttl_sqlite_ystore(test_ydoc):
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, metadata_callback=MetadataCallback(), delete_db=True)
-
-    await ystore.write(b"a")
-    async with aiosqlite.connect(ystore.db_path) as db:
-        assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 1
-
     now = time.time()
 
-    # assert that adding a record before document TTL doesn't delete document history
-    with patch("time.time") as mock_time:
-        mock_time.return_value = now
-        await ystore.write(b"b")
-        async with aiosqlite.connect(ystore.db_path) as db:
-            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
+    for i in range(3):
+        # assert that adding a record before document TTL doesn't delete document history
+        with patch("time.time") as mock_time:
+            mock_time.return_value = now
+            await ystore.write(test_ydoc.update())
+            async with aiosqlite.connect(ystore.db_path) as db:
+                assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[
+                    0
+                ] == i + 1
 
     # assert that adding a record after document TTL deletes previous document history
     with patch("time.time") as mock_time:
-        mock_time.return_value = now + ystore.document_ttl + 1000
-        await ystore.write(b"c")
+        mock_time.return_value = now + ystore.document_ttl + 1
+        await ystore.write(test_ydoc.update())
         async with aiosqlite.connect(ystore.db_path) as db:
-            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 1
+            # two updates in DB: one squashed update and the new update
+            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
 
 
 @pytest.mark.asyncio
