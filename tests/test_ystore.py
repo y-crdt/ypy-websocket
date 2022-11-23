@@ -26,16 +26,21 @@ class MyTempFileYStore(TempFileYStore):
     prefix_dir = "test_temp_"
 
 
-class MySQLiteYStore(SQLiteYStore):
-    db_path = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "ystore.db")
+MY_SQLITE_YSTORE_DB_PATH = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "ystore.db")
 
-    def __del__(self):
-        os.remove(self.db_path)
+
+class MySQLiteYStore(SQLiteYStore):
+    db_path = MY_SQLITE_YSTORE_DB_PATH
+
+    def __init__(self, *args, delete_db=False, **kwargs):
+        if delete_db:
+            os.remove(self.db_path)
+        super().__init__(*args, **kwargs)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("YStore", (MyTempFileYStore, MySQLiteYStore))
-async def test_file_ystore(YStore):
+async def test_ystore(YStore):
     store_name = "my_store"
     ystore = YStore(store_name, metadata_callback=MetadataCallback())
     data = [b"foo", b"bar", b"baz"]
@@ -56,7 +61,7 @@ async def test_file_ystore(YStore):
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore():
     store_name = "my_store"
-    ystore = MySQLiteYStore(store_name, metadata_callback=MetadataCallback())
+    ystore = MySQLiteYStore(store_name, metadata_callback=MetadataCallback(), delete_db=True)
 
     await ystore.write(b"a")
     async with aiosqlite.connect(ystore.db_path) as db:
@@ -77,3 +82,15 @@ async def test_document_ttl_sqlite_ystore():
         await ystore.write(b"c")
         async with aiosqlite.connect(ystore.db_path) as db:
             assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("YStore", (MyTempFileYStore, MySQLiteYStore))
+async def test_version(YStore, caplog):
+    store_name = "my_store"
+    prev_version = YStore.version
+    YStore.version = -1
+    ystore = YStore(store_name, metadata_callback=MetadataCallback())
+    await ystore.write(b"foo")
+    YStore.version = prev_version
+    assert "YStore version mismatch" in caplog.text
