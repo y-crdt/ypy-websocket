@@ -8,7 +8,7 @@ const ystate = ydoc.getMap("state")
 const ws = require('ws')
 
 const wsProvider = new WebsocketProvider(
-  'ws://localhost:1234', 'my-roomname',
+  'ws://127.0.0.1:1234', 'my-roomname',
   ydoc,
   { WebSocketPolyfill: ws }
 )
