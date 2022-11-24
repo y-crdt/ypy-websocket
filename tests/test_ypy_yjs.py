@@ -39,7 +39,7 @@ class YTest:
 async def test_ypy_yjs_0(yws_server, yjs_client):
     ydoc = Y.YDoc()
     ytest = YTest(ydoc)
-    websocket = await connect("ws://localhost:1234/my-roomname")
+    websocket = await connect("ws://127.0.0.1:1234/my-roomname")
     WebsocketProvider(ydoc, websocket)
     ymap = ydoc.get_map("map")
     # set a value in "in"
