@@ -40,6 +40,7 @@ path = "ypy_websocket/__init__.py"
 [tool.hatch.build.targets.sdist]
 include = [
     "/ypy_websocket",
+    "/tests",
 ]
 
 [tool.flake8]
