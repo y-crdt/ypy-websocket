@@ -56,9 +56,7 @@ class Decoder:
         self.i0 = 0
 
     def read_var_uint(self) -> int:
-        if self.length == 0:
-            return 0
-        if self.length < 0:
+        if self.length <= 0:
             raise RuntimeError("Y protocol error")
         uint = 0
         i = 0
@@ -73,9 +71,11 @@ class Decoder:
         return uint
 
     def read_message(self) -> Optional[bytes]:
+        if self.length == 0:
+            return None
         length = self.read_var_uint()
         if length == 0:
-            return None
+            return b""
         i1 = self.i0 + length
         message = self.stream[self.i0 : i1]  # noqa
         self.i0 = i1
