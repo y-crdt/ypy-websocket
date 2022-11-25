@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.8.0
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.7.2...93695bb8506b47ff88f3e36c4f5fc4823e650513))
+
+### Merged PRs
+
+- Implement timestamp in FileYStore, return timestamp in read [#57](https://github.com/y-crdt/ypy-websocket/pull/57) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-11-25&to=2022-11-25&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-11-25..2022-11-25&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.7.2
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/0.7.0...6f15b90fac8105e9b0ef369df30ca08db94e6b1a))
@@ -19,7 +35,5 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-11-22&to=2022-11-25&type=c))
 
 [@bollwyvl](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Abollwyvl+updated%3A2022-11-22..2022-11-25&type=Issues) | [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-11-22..2022-11-25&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.7.1
