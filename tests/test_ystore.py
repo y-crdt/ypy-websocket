@@ -17,7 +17,7 @@ class MetadataCallback:
 
     def __call__(self):
         future = asyncio.Future()
-        future.set_result(bytes(self.i))
+        future.set_result(str(self.i).encode())
         self.i += 1
         return future
 
@@ -31,6 +31,7 @@ MY_SQLITE_YSTORE_DB_PATH = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "yst
 
 class MySQLiteYStore(SQLiteYStore):
     db_path = MY_SQLITE_YSTORE_DB_PATH
+    document_ttl = 1000
 
     def __init__(self, *args, delete_db=False, **kwargs):
         if delete_db:
@@ -52,16 +53,18 @@ async def test_ystore(YStore):
     elif YStore == MySQLiteYStore:
         assert Path(MySQLiteYStore.db_path).exists()
     i = 0
-    async for d, m in ystore.read():
+    async for d, m, t in ystore.read():
         assert d == data[i]  # data
-        assert m == bytes(i)  # metadata
+        assert m == str(i).encode()  # metadata
         i += 1
+
+    assert i == len(data)
 
 
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore(test_ydoc):
     store_name = "my_store"
-    ystore = MySQLiteYStore(store_name, metadata_callback=MetadataCallback(), delete_db=True)
+    ystore = MySQLiteYStore(store_name, delete_db=True)
     now = time.time()
 
     for i in range(3):
@@ -89,7 +92,7 @@ async def test_version(YStore, caplog):
     store_name = "my_store"
     prev_version = YStore.version
     YStore.version = -1
-    ystore = YStore(store_name, metadata_callback=MetadataCallback())
+    ystore = YStore(store_name)
     await ystore.write(b"foo")
     YStore.version = prev_version
     assert "YStore version mismatch" in caplog.text

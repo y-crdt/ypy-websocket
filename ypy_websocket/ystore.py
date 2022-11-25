@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import struct
 import tempfile
 import time
 from abc import ABC, abstractmethod
@@ -21,7 +22,7 @@ class YDocNotFound(Exception):
 class BaseYStore(ABC):
 
     metadata_callback: Optional[Callable] = None
-    version = 1
+    version = 2
 
     @abstractmethod
     def __init__(self, path: str, metadata_callback=None):
@@ -44,7 +45,7 @@ class BaseYStore(ABC):
         await self.write(update)
 
     async def apply_updates(self, ydoc: Y.YDoc):
-        async for update, metadata in self.read():  # type: ignore
+        async for update, *rest in self.read():  # type: ignore
             Y.apply_update(ydoc, update)  # type: ignore
 
 
@@ -90,7 +91,7 @@ class FileYStore(BaseYStore):
                 offset = len(version_bytes)
         return offset
 
-    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:  # type: ignore
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
         async with self.lock:
             if not await aiofiles.os.path.exists(self.path):
                 raise YDocNotFound
@@ -100,15 +101,16 @@ class FileYStore(BaseYStore):
                 data = await f.read()
                 if not data:
                     raise YDocNotFound
-        is_data = True
-        assert data is not None
+        i = 0
         for d in Decoder(data).read_messages():
-            if is_data:
+            if i == 0:
                 update = d
+            elif i == 1:
+                metadata = d
             else:
-                # yield data and metadata
-                yield update, d
-            is_data = not is_data
+                timestamp = struct.unpack("<d", d)[0]
+                yield update, metadata, timestamp
+            i = (i + 1) % 3
 
     async def write(self, data: bytes) -> None:
         parent = Path(self.path).parent
@@ -121,6 +123,9 @@ class FileYStore(BaseYStore):
                 metadata = await self.get_metadata()
                 metadata_len = write_var_uint(len(metadata))
                 await f.write(metadata_len + metadata)
+                timestamp = struct.pack("<d", time.time())
+                timestamp_len = write_var_uint(len(timestamp))
+                await f.write(timestamp_len + timestamp)
 
 
 class TempFileYStore(FileYStore):
@@ -162,8 +167,8 @@ class SQLiteYStore(BaseYStore):
     db_path: str = "ystore.db"
     # Determines the "time to live" for all documents, i.e. how recent the
     # latest update of a document must be before purging document history.
-    # Defaults to 1 day.
-    document_ttl: int = 24 * 60 * 60
+    # Defaults to never purging document history (None).
+    document_ttl: Optional[int] = None
     path: str
     db_initialized: asyncio.Task
 
@@ -207,17 +212,17 @@ class SQLiteYStore(BaseYStore):
                 await db.execute(f"PRAGMA user_version = {self.version}")
                 await db.commit()
 
-    async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:  # type: ignore
+    async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
         await self.db_initialized
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(
-                    "SELECT yupdate, metadata FROM yupdates WHERE path = ?", (self.path,)
+                    "SELECT yupdate, metadata, timestamp FROM yupdates WHERE path = ?", (self.path,)
                 ) as cursor:
                     found = False
-                    async for update, metadata in cursor:
+                    async for update, metadata, timestamp in cursor:
                         found = True
-                        yield update, metadata
+                        yield update, metadata, timestamp
                     if not found:
                         raise YDocNotFound
         except BaseException:
@@ -234,7 +239,7 @@ class SQLiteYStore(BaseYStore):
             row = await cursor.fetchone()
             diff = (time.time() - row[0]) if row else 0
 
-            if diff > self.document_ttl:
+            if self.document_ttl is not None and diff > self.document_ttl:
                 # squash updates
                 ydoc = Y.YDoc()
                 async with db.execute(
