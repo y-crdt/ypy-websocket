@@ -167,8 +167,8 @@ class SQLiteYStore(BaseYStore):
     db_path: str = "ystore.db"
     # Determines the "time to live" for all documents, i.e. how recent the
     # latest update of a document must be before purging document history.
-    # Defaults to 1 day.
-    document_ttl: int = 24 * 60 * 60
+    # Defaults to never purging document history (None).
+    document_ttl: Optional[int] = None
     path: str
     db_initialized: asyncio.Task
 
@@ -239,7 +239,7 @@ class SQLiteYStore(BaseYStore):
             row = await cursor.fetchone()
             diff = (time.time() - row[0]) if row else 0
 
-            if diff > self.document_ttl:
+            if self.document_ttl is not None and diff > self.document_ttl:
                 # squash updates
                 ydoc = Y.YDoc()
                 async with db.execute(

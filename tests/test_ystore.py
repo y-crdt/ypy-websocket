@@ -31,6 +31,7 @@ MY_SQLITE_YSTORE_DB_PATH = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "yst
 
 class MySQLiteYStore(SQLiteYStore):
     db_path = MY_SQLITE_YSTORE_DB_PATH
+    document_ttl = 1000
 
     def __init__(self, *args, delete_db=False, **kwargs):
         if delete_db:
