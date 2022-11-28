@@ -1,9 +1,7 @@
 import asyncio
 import os
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import patch
 
 import aiosqlite
 import pytest
@@ -31,7 +29,7 @@ MY_SQLITE_YSTORE_DB_PATH = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "yst
 
 class MySQLiteYStore(SQLiteYStore):
     db_path = MY_SQLITE_YSTORE_DB_PATH
-    document_ttl = 1000
+    document_ttl = 1
 
     def __init__(self, *args, delete_db=False, **kwargs):
         if delete_db:
@@ -61,29 +59,29 @@ async def test_ystore(YStore):
     assert i == len(data)
 
 
+async def count_yupdates(db):
+    """Returns number of yupdates in a SQLite DB given a connection."""
+    return (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0]
+
+
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore(test_ydoc):
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, delete_db=True)
-    now = time.time()
 
     for i in range(3):
         # assert that adding a record before document TTL doesn't delete document history
-        with patch("time.time") as mock_time:
-            mock_time.return_value = now
-            await ystore.write(test_ydoc.update())
-            async with aiosqlite.connect(ystore.db_path) as db:
-                assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[
-                    0
-                ] == i + 1
-
-    # assert that adding a record after document TTL deletes previous document history
-    with patch("time.time") as mock_time:
-        mock_time.return_value = now + ystore.document_ttl + 1
         await ystore.write(test_ydoc.update())
         async with aiosqlite.connect(ystore.db_path) as db:
-            # two updates in DB: one squashed update and the new update
-            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
+            assert (await count_yupdates(db)) == i + 1
+
+    await asyncio.sleep(ystore.document_ttl + 0.1)
+
+    # assert that adding a record after document TTL squashes previous document history
+    await ystore.write(test_ydoc.update())
+    async with aiosqlite.connect(ystore.db_path) as db:
+        # two updates in DB: one squashed update and the new update
+        assert (await count_yupdates(db)) == 2
 
 
 @pytest.mark.asyncio
