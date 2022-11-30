@@ -123,7 +123,9 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
         YSyncMessageType.SYNC_UPDATE,
     ):
         update = read_message(msg)
-        Y.apply_update(ydoc, update)
+        # Ignore empty updates (see https://github.com/y-crdt/ypy/issues/98)
+        if update != b"\x00\x00":
+            Y.apply_update(ydoc, update)
 
 
 async def sync(ydoc: Y.YDoc, websocket, log):
