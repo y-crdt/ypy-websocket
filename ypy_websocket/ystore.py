@@ -213,6 +213,17 @@ class SQLiteYStore(BaseYStore):
                 await db.execute(f"PRAGMA user_version = {self.version}")
                 await db.commit()
 
+        # squash updates if document TTL already elapsed
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT timestamp FROM yupdates WHERE path = ? ORDER BY timestamp DESC LIMIT 1",
+                (self.path,),
+            )
+            row = await cursor.fetchone()
+            diff = (time.time() - row[0]) if row else 0
+            if self.document_ttl is not None and diff > self.document_ttl:
+                await self._squash()
+
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
         await self.db_initialized
         try:
@@ -242,8 +253,8 @@ class SQLiteYStore(BaseYStore):
         # create task that squashes document history after document_ttl
         self._create_squash_task()
 
-    async def _squash_coroutine(self):
-        await asyncio.sleep(self.document_ttl)
+    async def _squash(self):
+        """Squashes document history into a single Y update."""
         async with aiosqlite.connect(self.db_path) as db:
             # squash updates
             ydoc = Y.YDoc()
@@ -263,6 +274,10 @@ class SQLiteYStore(BaseYStore):
             )
             await db.commit()
 
+    async def _squash_later(self):
+        await asyncio.sleep(self.document_ttl)
+        await self._squash()
+
     def _create_squash_task(self) -> None:
         """Creates a task that squashes document history after self.document_ttl
         and binds it to the _squash_task attribute. If a task already exists,
@@ -272,4 +287,4 @@ class SQLiteYStore(BaseYStore):
         if self._squash_task is not None:
             self._squash_task.cancel()
 
-        self._squash_task = asyncio.create_task(self._squash_coroutine())
+        self._squash_task = asyncio.create_task(self._squash_later())

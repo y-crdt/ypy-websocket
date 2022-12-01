@@ -1,7 +1,9 @@
 import asyncio
 import os
 import tempfile
+import time
 from pathlib import Path
+from unittest.mock import patch
 
 import aiosqlite
 import pytest
@@ -66,6 +68,7 @@ async def count_yupdates(db):
 
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed after the document TTL."""
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, delete_db=True)
 
@@ -75,13 +78,53 @@ async def test_document_ttl_sqlite_ystore(test_ydoc):
         async with aiosqlite.connect(ystore.db_path) as db:
             assert (await count_yupdates(db)) == i + 1
 
-    await asyncio.sleep(ystore.document_ttl + 0.1)
+    await ystore._squash_task
 
-    # assert that adding a record after document TTL squashes previous document history
-    await ystore.write(test_ydoc.update())
     async with aiosqlite.connect(ystore.db_path) as db:
-        # two updates in DB: one squashed update and the new update
-        assert (await count_yupdates(db)) == 2
+        assert (await count_yupdates(db)) == 1
+
+
+@pytest.mark.asyncio
+async def test_document_ttl_simultaneous_write_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed after the document TTL, and a
+    write that happens at the same time is also squashed."""
+    store_name = "my_store"
+    ystore = MySQLiteYStore(store_name, delete_db=True)
+
+    for i in range(3):
+        await ystore.write(test_ydoc.update())
+        async with aiosqlite.connect(ystore.db_path) as db:
+            assert (await count_yupdates(db)) == i + 1
+
+    await asyncio.sleep(ystore.document_ttl)
+    await ystore.write(test_ydoc.update())
+    await ystore._squash_task
+
+    async with aiosqlite.connect(ystore.db_path) as db:
+        assert (await count_yupdates(db)) == 1
+
+
+@pytest.mark.asyncio
+async def test_document_ttl_init_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed on init if the document TTL has
+    already elapsed since last update."""
+    store_name = "my_store"
+    ystore = MySQLiteYStore(store_name, delete_db=True)
+    now = time.time()
+
+    with patch("time.time") as mock_time:
+        mock_time.return_value = now - ystore.document_ttl - 1
+        for i in range(3):
+            await ystore.write(test_ydoc.update())
+            async with aiosqlite.connect(ystore.db_path) as db:
+                assert (await count_yupdates(db)) == i + 1
+
+    del ystore
+    ystore = MySQLiteYStore(store_name)
+    await ystore.db_initialized
+
+    async with aiosqlite.connect(ystore.db_path) as db:
+        assert (await count_yupdates(db)) == 1
 
 
 @pytest.mark.asyncio
