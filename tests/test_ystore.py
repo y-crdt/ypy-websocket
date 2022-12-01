@@ -31,7 +31,7 @@ MY_SQLITE_YSTORE_DB_PATH = str(Path(tempfile.mkdtemp(prefix="test_sql_")) / "yst
 
 class MySQLiteYStore(SQLiteYStore):
     db_path = MY_SQLITE_YSTORE_DB_PATH
-    document_ttl = 1000
+    document_ttl = 1
 
     def __init__(self, *args, delete_db=False, **kwargs):
         if delete_db:
@@ -61,29 +61,70 @@ async def test_ystore(YStore):
     assert i == len(data)
 
 
+async def count_yupdates(db):
+    """Returns number of yupdates in a SQLite DB given a connection."""
+    return (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0]
+
+
 @pytest.mark.asyncio
 async def test_document_ttl_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed after the document TTL."""
+    store_name = "my_store"
+    ystore = MySQLiteYStore(store_name, delete_db=True)
+
+    for i in range(3):
+        # assert that adding a record before document TTL doesn't delete document history
+        await ystore.write(test_ydoc.update())
+        async with aiosqlite.connect(ystore.db_path) as db:
+            assert (await count_yupdates(db)) == i + 1
+
+    await ystore._squash_task
+
+    async with aiosqlite.connect(ystore.db_path) as db:
+        assert (await count_yupdates(db)) == 1
+
+
+@pytest.mark.asyncio
+async def test_document_ttl_simultaneous_write_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed after the document TTL, and a
+    write that happens at the same time is also squashed."""
+    store_name = "my_store"
+    ystore = MySQLiteYStore(store_name, delete_db=True)
+
+    for i in range(3):
+        await ystore.write(test_ydoc.update())
+        async with aiosqlite.connect(ystore.db_path) as db:
+            assert (await count_yupdates(db)) == i + 1
+
+    await asyncio.sleep(ystore.document_ttl)
+    await ystore.write(test_ydoc.update())
+    await ystore._squash_task
+
+    async with aiosqlite.connect(ystore.db_path) as db:
+        assert (await count_yupdates(db)) == 1
+
+
+@pytest.mark.asyncio
+async def test_document_ttl_init_sqlite_ystore(test_ydoc):
+    """Assert that document history is squashed on init if the document TTL has
+    already elapsed since last update."""
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, delete_db=True)
     now = time.time()
 
-    for i in range(3):
-        # assert that adding a record before document TTL doesn't delete document history
-        with patch("time.time") as mock_time:
-            mock_time.return_value = now
+    with patch("time.time") as mock_time:
+        mock_time.return_value = now - ystore.document_ttl - 1
+        for i in range(3):
             await ystore.write(test_ydoc.update())
             async with aiosqlite.connect(ystore.db_path) as db:
-                assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[
-                    0
-                ] == i + 1
+                assert (await count_yupdates(db)) == i + 1
 
-    # assert that adding a record after document TTL deletes previous document history
-    with patch("time.time") as mock_time:
-        mock_time.return_value = now + ystore.document_ttl + 1
-        await ystore.write(test_ydoc.update())
-        async with aiosqlite.connect(ystore.db_path) as db:
-            # two updates in DB: one squashed update and the new update
-            assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
+    del ystore
+    ystore = MySQLiteYStore(store_name)
+    await ystore.db_initialized
+
+    async with aiosqlite.connect(ystore.db_path) as db:
+        assert (await count_yupdates(db)) == 1
 
 
 @pytest.mark.asyncio

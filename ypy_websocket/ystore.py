@@ -177,6 +177,7 @@ class SQLiteYStore(BaseYStore):
         self.metadata_callback = metadata_callback
         self.log = log or logging.getLogger(__name__)
         self.db_initialized = asyncio.create_task(self.init_db())
+        self._squash_task: Optional[asyncio.Task] = None
 
     async def init_db(self):
         create_db = False
@@ -212,6 +213,17 @@ class SQLiteYStore(BaseYStore):
                 await db.execute(f"PRAGMA user_version = {self.version}")
                 await db.commit()
 
+        # squash updates if document TTL already elapsed
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT timestamp FROM yupdates WHERE path = ? ORDER BY timestamp DESC LIMIT 1",
+                (self.path,),
+            )
+            row = await cursor.fetchone()
+            diff = (time.time() - row[0]) if row else 0
+            if self.document_ttl is not None and diff > self.document_ttl:
+                await self._squash()
+
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
         await self.db_initialized
         try:
@@ -231,36 +243,48 @@ class SQLiteYStore(BaseYStore):
     async def write(self, data: bytes) -> None:
         await self.db_initialized
         async with aiosqlite.connect(self.db_path) as db:
-            # first, determine time elapsed since last update
-            cursor = await db.execute(
-                "SELECT timestamp FROM yupdates WHERE path = ? ORDER BY timestamp DESC LIMIT 1",
-                (self.path,),
-            )
-            row = await cursor.fetchone()
-            diff = (time.time() - row[0]) if row else 0
-
-            if self.document_ttl is not None and diff > self.document_ttl:
-                # squash updates
-                ydoc = Y.YDoc()
-                async with db.execute(
-                    "SELECT yupdate FROM yupdates WHERE path = ?", (self.path,)
-                ) as cursor:
-                    async for update, in cursor:
-                        Y.apply_update(ydoc, update)
-                # delete history
-                await db.execute("DELETE FROM yupdates WHERE path = ?", (self.path,))
-                # insert squashed updates
-                squashed_update = Y.encode_state_as_update(ydoc)
-                metadata = await self.get_metadata()
-                await db.execute(
-                    "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
-                    (self.path, squashed_update, metadata, time.time()),
-                )
-
-            # finally, write this update to the DB
+            # write this update to the DB
             metadata = await self.get_metadata()
             await db.execute(
                 "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
                 (self.path, data, metadata, time.time()),
             )
             await db.commit()
+        # create task that squashes document history after document_ttl
+        self._create_squash_task()
+
+    async def _squash(self):
+        """Squashes document history into a single Y update."""
+        async with aiosqlite.connect(self.db_path) as db:
+            # squash updates
+            ydoc = Y.YDoc()
+            async with db.execute(
+                "SELECT yupdate FROM yupdates WHERE path = ?", (self.path,)
+            ) as cursor:
+                async for update, in cursor:
+                    Y.apply_update(ydoc, update)
+            # delete history
+            await db.execute("DELETE FROM yupdates WHERE path = ?", (self.path,))
+            # insert squashed updates
+            squashed_update = Y.encode_state_as_update(ydoc)
+            metadata = await self.get_metadata()
+            await db.execute(
+                "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
+                (self.path, squashed_update, metadata, time.time()),
+            )
+            await db.commit()
+
+    async def _squash_later(self):
+        await asyncio.sleep(self.document_ttl)
+        await self._squash()
+
+    def _create_squash_task(self) -> None:
+        """Creates a task that squashes document history after self.document_ttl
+        and binds it to the _squash_task attribute. If a task already exists,
+        this cancels the existing task."""
+        if self.document_ttl is None:
+            return
+        if self._squash_task is not None:
+            self._squash_task.cancel()
+
+        self._squash_task = asyncio.create_task(self._squash_later())
