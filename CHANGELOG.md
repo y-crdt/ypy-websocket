@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.8.2
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.1...6409366bb86e80e22a04e7b7933a5ce5dd84b77e))
+
+### Merged PRs
+
+- Use a lock in SQLiteYStore [#61](https://github.com/y-crdt/ypy-websocket/pull/61) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-12-01&to=2022-12-06&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-12-01..2022-12-06&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.8.1
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.0...433868106d79df11c822f8f99f1f1f30a33d4974))
@@ -16,8 +32,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-11-25&to=2022-12-01&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-11-25..2022-12-01&type=Issues) | [@ellisonbg](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Aellisonbg+updated%3A2022-11-25..2022-12-01&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.8.0
 
