@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 import y_py as Y
@@ -70,5 +71,5 @@ async def test_ypy_yjs_1(yws_server, yjs_client):
     await ytest.clock_run()
     ycells = ydoc.get_array("cells")
     ystate = ydoc.get_map("state")
-    assert ycells.to_json() == [{"metadata": {"foo": "bar"}, "source": "1 + 2"}]
-    assert ystate.to_json() == {"state": {"dirty": False}}
+    assert json.loads(ycells.to_json()) == [{"metadata": {"foo": "bar"}, "source": "1 + 2"}]
+    assert json.loads(ystate.to_json()) == {"state": {"dirty": False}}
