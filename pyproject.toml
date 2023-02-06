@@ -7,7 +7,6 @@ name = "ypy-websocket"
 dynamic = ["version"]
 description = "WebSocket connector for Ypy"
 readme = "README.md"
-license = "MIT"
 requires-python = ">=3.7"
 authors = [
     { name = "David Brochart", email = "david.brochart@gmail.com" },
@@ -54,3 +53,6 @@ extend-ignore = [
     # black adds spaces around ':'
     "E203",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
