@@ -1,0 +1,6 @@
+name: ypy-websocket
+channels:
+  - conda-forge
+dependencies:
+  - pip
+  - nodejs

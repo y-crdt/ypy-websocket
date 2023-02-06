@@ -39,16 +39,15 @@ jobs:
         shell: bash -l {0}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Install Miniconda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: actions/checkout@v3
+      - name: Install mamba
+        uses: mamba-org/provision-with-micromamba@main
         with:
-          mamba-version: "*"
-          channels: conda-forge
-          python-version: "3.7"
+          environment-file: environment-dev.yml
+          environment-name: ypy-websocket
+          extra-specs: python=${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          mamba install python=${{ matrix.python-version }} pip nodejs
           pip install .[test]
           cd tests; npm install
       - name: Check types
