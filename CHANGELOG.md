@@ -2,6 +2,24 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.8.3
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.2...f0851d01bd7143bf5b94a0dbf90120aac0bd2800))
+
+### Merged PRs
+
+- Bump y-py >=0.6.0,\<0.7.0 [#68](https://github.com/y-crdt/ypy-websocket/pull/68) ([@davidbrochart](https://github.com/davidbrochart))
+- Move pytest.ini entries to pyproject.toml [#64](https://github.com/y-crdt/ypy-websocket/pull/64) ([@bnavigator](https://github.com/bnavigator))
+- Compare dicts not JSON string with dicts [#63](https://github.com/y-crdt/ypy-websocket/pull/63) ([@bnavigator](https://github.com/bnavigator))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-12-06&to=2023-02-20&type=c))
+
+[@bnavigator](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Abnavigator+updated%3A2022-12-06..2023-02-20&type=Issues) | [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-12-06..2023-02-20&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.8.2
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.1...6409366bb86e80e22a04e7b7933a5ce5dd84b77e))
@@ -15,8 +33,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-12-01&to=2022-12-06&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-12-01..2022-12-06&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.8.1
 
