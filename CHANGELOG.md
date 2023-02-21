@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.8.4
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.3...7b7f66d380e5ff02d4dceb51d5a16bd6fc3adc76))
+
+### Merged PRs
+
+- Keep reference to asyncio tasks [#69](https://github.com/y-crdt/ypy-websocket/pull/69) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-02-20&to=2023-02-21&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-02-20..2023-02-21&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.8.3
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.2...f0851d01bd7143bf5b94a0dbf90120aac0bd2800))
@@ -17,8 +33,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2022-12-06&to=2023-02-20&type=c))
 
 [@bnavigator](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Abnavigator+updated%3A2022-12-06..2023-02-20&type=Issues) | [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2022-12-06..2023-02-20&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.8.2
 
