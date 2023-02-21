@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from functools import partial
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 
 import y_py as Y
 
@@ -18,6 +18,7 @@ from .yutils import (
 
 class YRoom:
 
+    background_tasks: Set[asyncio.Task]
     clients: List
     ydoc: Y.YDoc
     ystore: Optional[BaseYStore]
@@ -36,6 +37,7 @@ class YRoom:
         self.clients = []
         self._on_message = None
         self._broadcast_task = asyncio.create_task(self._broadcast_updates())
+        self.background_tasks = set()
 
     @property
     def ready(self) -> bool:
@@ -63,10 +65,14 @@ class YRoom:
             for client in self.clients:
                 self.log.debug("Sending Y update to client with endpoint: %s", client.path)
                 message = create_update_message(update)
-                asyncio.create_task(client.send(message))
+                task = asyncio.create_task(client.send(message))
+                self.background_tasks.add(task)
+                task.add_done_callback(self.background_tasks.discard)
             if self.ystore:
                 self.log.debug("Writing Y update to YStore")
-                asyncio.create_task(self.ystore.write(update))
+                task = asyncio.create_task(self.ystore.write(update))
+                self.background_tasks.add(task)
+                task.add_done_callback(self.background_tasks.discard)
 
     def _clean(self):
         self._broadcast_task.cancel()
@@ -75,6 +81,7 @@ class YRoom:
 class WebsocketServer:
 
     auto_clean_rooms: bool
+    background_tasks: Set[asyncio.Task]
     rooms: Dict[str, YRoom]
 
     def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True, log=None):
@@ -82,6 +89,7 @@ class WebsocketServer:
         self.auto_clean_rooms = auto_clean_rooms
         self.log = log or logging.getLogger(__name__)
         self.rooms = {}
+        self.background_tasks = set()
 
     def get_room(self, path: str) -> YRoom:
         if path not in self.rooms.keys():
@@ -125,9 +133,11 @@ class WebsocketServer:
                 # update our internal state in the background
                 # changes to the internal state are then forwarded to all clients
                 # and stored in the YStore (if any)
-                asyncio.create_task(
+                task = asyncio.create_task(
                     process_sync_message(message[1:], room.ydoc, websocket, self.log)
                 )
+                self.background_tasks.add(task)
+                task.add_done_callback(self.background_tasks.discard)
             elif message_type == YMessageType.AWARENESS:
                 # forward awareness messages from this client to all clients,
                 # including itself, because it's used to keep the connection alive
@@ -142,7 +152,9 @@ class WebsocketServer:
                         websocket.path,
                         client.path,
                     )
-                    asyncio.create_task(client.send(message))
+                    task = asyncio.create_task(client.send(message))
+                    self.background_tasks.add(task)
+                    task.add_done_callback(self.background_tasks.discard)
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
