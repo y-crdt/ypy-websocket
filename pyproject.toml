@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "ypy-websocket"
 dynamic = ["version"]
 description = "WebSocket connector for Ypy"
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.7"
 authors = [
@@ -14,6 +15,17 @@ authors = [
 keywords = [
     "websocket",
     "yjs",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
     "aiofiles >=22.1.0,<23",
@@ -32,6 +44,9 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/y-crdt/ypy-websocket"
+Source = "https://github.com/y-crdt/ypy-websocket"
+Issues = "https://github.com/y-crdt/ypy-websocket/issues"
+Pypi = "https://pypi.org/project/ypy-websocket"
 
 [tool.hatch.version]
 path = "ypy_websocket/__init__.py"
