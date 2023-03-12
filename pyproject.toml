@@ -28,8 +28,8 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
-    "aiofiles >=22.1.0,<23",
-    "aiosqlite >=0.17.0,<1",
+    "anyio >=3.6.2,<4",
+    "aiosqlite >=0.18.0,<1",
     "y-py >=0.6.0,<0.7.0",
 ]
 

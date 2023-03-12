@@ -3,7 +3,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
-import aiofiles.os  # type: ignore
+import anyio
 import y_py as Y
 
 
@@ -144,7 +144,7 @@ async def get_new_path(path: str) -> str:
     ext = p.suffix
     p_noext = p.with_suffix("")
     i = 1
-    dir_list = await aiofiles.os.listdir()
+    dir_list = [p async for p in anyio.Path().iterdir()]
     while True:
         new_path = f"{p_noext}({i}){ext}"
         if new_path not in dir_list:
