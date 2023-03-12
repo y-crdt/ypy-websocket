@@ -7,9 +7,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional, Tuple
 
-import aiofiles  # type: ignore
-import aiofiles.os  # type: ignore
-import aiosqlite  # type: ignore
+import aiosqlite
+import anyio
 import y_py as Y
 
 from .yutils import Decoder, get_new_path, write_var_uint
@@ -63,12 +62,12 @@ class FileYStore(BaseYStore):
         self.lock = asyncio.Lock()
 
     async def check_version(self) -> int:
-        if not await aiofiles.os.path.exists(self.path):
+        if not await anyio.Path(self.path).exists():
             version_mismatch = True
         else:
             version_mismatch = False
             move_file = False
-            async with aiofiles.open(self.path, "rb") as f:
+            async with await anyio.open_file(self.path, "rb") as f:
                 header = await f.read(8)
                 if header == b"VERSION:":
                     version = int(await f.readline())
@@ -83,9 +82,9 @@ class FileYStore(BaseYStore):
             if move_file:
                 new_path = await get_new_path(self.path)
                 self.log.warning(f"YStore version mismatch, moving {self.path} to {new_path}")
-                await aiofiles.os.rename(self.path, new_path)
+                await anyio.Path(self.path).rename(new_path)
         if version_mismatch:
-            async with aiofiles.open(self.path, "wb") as f:
+            async with await anyio.open_file(self.path, "wb") as f:
                 version_bytes = f"VERSION:{self.version}\n".encode()
                 await f.write(version_bytes)
                 offset = len(version_bytes)
@@ -93,10 +92,10 @@ class FileYStore(BaseYStore):
 
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
         async with self.lock:
-            if not await aiofiles.os.path.exists(self.path):
+            if not await anyio.Path(self.path).exists():
                 raise YDocNotFound
             offset = await self.check_version()
-            async with aiofiles.open(self.path, "rb") as f:
+            async with await anyio.open_file(self.path, "rb") as f:
                 await f.seek(offset)
                 data = await f.read()
                 if not data:
@@ -115,9 +114,9 @@ class FileYStore(BaseYStore):
     async def write(self, data: bytes) -> None:
         parent = Path(self.path).parent
         async with self.lock:
-            await aiofiles.os.makedirs(parent, exist_ok=True)
+            await anyio.Path(parent).mkdir(parents=True, exist_ok=True)
             await self.check_version()
-            async with aiofiles.open(self.path, "ab") as f:
+            async with await anyio.open_file(self.path, "ab") as f:
                 data_len = write_var_uint(len(data))
                 await f.write(data_len + data)
                 metadata = await self.get_metadata()
@@ -183,7 +182,7 @@ class SQLiteYStore(BaseYStore):
     async def init_db(self):
         create_db = False
         move_db = False
-        if not await aiofiles.os.path.exists(self.db_path):
+        if not await anyio.Path(self.db_path).exists():
             create_db = True
         else:
             async with self.lock:
@@ -203,7 +202,7 @@ class SQLiteYStore(BaseYStore):
         if move_db:
             new_path = await get_new_path(self.db_path)
             self.log.warning(f"YStore version mismatch, moving {self.db_path} to {new_path}")
-            await aiofiles.os.rename(self.db_path, new_path)
+            await anyio.Path(self.db_path).rename(new_path)
         if create_db:
             async with self.lock:
                 async with aiosqlite.connect(self.db_path) as db:
