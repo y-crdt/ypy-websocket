@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.10.0
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.9.0...49a45305416f70a5c7c969f1017e5b3e871db812))
+
+### Merged PRs
+
+- Implement ASGI server [#75](https://github.com/y-crdt/ypy-websocket/pull/75) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-04-06&to=2023-06-01&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-04-06..2023-06-01&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.9.0
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.8.4...69cbc95f011e29418cd2c0904245db16b7b0fb64))
@@ -16,8 +32,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-02-21&to=2023-04-06&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-02-21..2023-04-06&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.8.4
 
