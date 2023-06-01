@@ -4,7 +4,7 @@
 
 # ypy-websocket
 
-ypy-websocket is an async WebSocket connector for Ypy.
+ypy-websocket is an ASGI-compatible async WebSocket connector for Ypy.
 
 ## Usage
 
@@ -44,6 +44,19 @@ async def server():
         await asyncio.Future()  # run forever
 
 asyncio.run(server())
+```
+
+Or with an ASGI server:
+
+```py
+# main.py
+import uvicorn
+from ypy_websocket.asgi import Server
+
+app = Server()
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", port=5000, log_level="info")
 ```
 
 ### WebSocket API
