@@ -40,6 +40,7 @@ test = [
     "pytest",
     "pytest-asyncio",
     "websockets >=10.0",
+    "uvicorn",
 ]
 
 [project.urls]
