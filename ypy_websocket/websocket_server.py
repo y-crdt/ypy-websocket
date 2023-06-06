@@ -78,7 +78,7 @@ class YRoom:
         self._broadcast_task.cancel()
         await self._broadcast_task
 
-        for background_task in background_tasks:
+        for background_task in self.background_tasks:
             background_task.cancel()
             await background_task
 
