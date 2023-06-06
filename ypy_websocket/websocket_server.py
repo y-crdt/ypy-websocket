@@ -74,8 +74,13 @@ class YRoom:
                 self.background_tasks.add(task)
                 task.add_done_callback(self.background_tasks.discard)
 
-    def _clean(self):
+    async def _clean(self):
         self._broadcast_task.cancel()
+        await self._broadcast_task
+
+        for background_task in background_tasks:
+            background_task.cancel()
+            await background_task
 
 
 class WebsocketServer:
@@ -108,13 +113,13 @@ class WebsocketServer:
             from_name = self.get_room_name(from_room)
         self.rooms[to_name] = self.rooms.pop(from_name)
 
-    def delete_room(self, *, name: Optional[str] = None, room: Optional[YRoom] = None):
+    async def delete_room(self, *, name: Optional[str] = None, room: Optional[YRoom] = None):
         if name is not None and room is not None:
             raise RuntimeError("Cannot pass name and room")
         if name is None:
             name = self.get_room_name(room)
         room = self.rooms[name]
-        room._clean()
+        await room._clean()
         del self.rooms[name]
 
     async def serve(self, websocket):
@@ -158,4 +163,16 @@ class WebsocketServer:
         # remove this client
         room.clients = [c for c in room.clients if c != websocket]
         if self.auto_clean_rooms and not room.clients:
-            self.delete_room(room=room)
+            await self.delete_room(room=room)
+
+    async def clean(self):
+        for name, room in list(self.rooms.items()):
+            try:
+                await self.delete_room(room=room)
+            except Exception as e:
+                msg = f"Failed to delete room {name}"
+                self.log.debug(msg, exc_info=e)
+
+        for task in self.background_tasks.copy():
+            task.cancel()
+            await task
