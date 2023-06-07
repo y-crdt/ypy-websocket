@@ -26,14 +26,16 @@ async def test_asgi(unused_tcp_port):
     ymap1 = ydoc1.get_map("map")
     with ydoc1.begin_transaction() as t:
         ymap1.set(t, "key", "value")
-    async with connect(f"ws://localhost:{unused_tcp_port}/my-roomname") as websocket1:
-        WebsocketProvider(ydoc1, websocket1)
+    async with connect(
+        f"ws://localhost:{unused_tcp_port}/my-roomname"
+    ) as websocket1, WebsocketProvider(ydoc1, websocket1):
         await asyncio.sleep(0.1)
 
     # client 2
     ydoc2 = Y.YDoc()
-    async with connect(f"ws://localhost:{unused_tcp_port}/my-roomname") as websocket2:
-        WebsocketProvider(ydoc2, websocket2)
+    async with connect(
+        f"ws://localhost:{unused_tcp_port}/my-roomname"
+    ) as websocket2, WebsocketProvider(ydoc2, websocket2):
         await asyncio.sleep(0.1)
 
     ymap2 = ydoc2.get_map("map")

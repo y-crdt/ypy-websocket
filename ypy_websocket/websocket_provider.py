@@ -17,6 +17,8 @@ class WebsocketProvider:
 
     _ydoc: Y.YDoc
     _update_queue: asyncio.Queue
+    _run_task: asyncio.Task
+    _send_task: asyncio.Task
 
     def __init__(self, ydoc: Y.YDoc, websocket, log=None):
         self._ydoc = ydoc
@@ -24,15 +26,20 @@ class WebsocketProvider:
         self.log = log or logging.getLogger(__name__)
         self._update_queue = asyncio.Queue()
         ydoc.observe_after_transaction(partial(put_updates, self._update_queue, ydoc))
+
+    async def __aenter__(self):
         self._run_task = asyncio.create_task(self._run())
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._send_task.cancel()
+        self._run_task.cancel()
 
     async def _run(self):
         await sync(self._ydoc, self._websocket, self.log)
-        send_task = asyncio.create_task(self._send())
+        self._send_task = asyncio.create_task(self._send())
         async for message in self._websocket:
             if message[0] == YMessageType.SYNC:
                 await process_sync_message(message[1:], self._ydoc, self._websocket, self.log)
-        send_task.cancel()
 
     async def _send(self):
         while True:
