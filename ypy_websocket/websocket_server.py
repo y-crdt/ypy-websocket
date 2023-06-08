@@ -4,8 +4,9 @@ from functools import partial
 from typing import Callable, Dict, List, Optional
 
 import y_py as Y
-from anyio import create_task_group
+from anyio import create_memory_object_stream, create_task_group
 from anyio.abc import TaskGroup
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .awareness import Awareness
 from .ystore import BaseYStore
@@ -24,7 +25,8 @@ class YRoom:
     ydoc: Y.YDoc
     ystore: Optional[BaseYStore]
     _on_message: Optional[Callable]
-    _update_queue: asyncio.Queue
+    _update_send_stream: MemoryObjectSendStream
+    _update_receive_stream: MemoryObjectReceiveStream
     _ready: bool
     _task_group: TaskGroup
     _entered: bool
@@ -32,7 +34,7 @@ class YRoom:
     def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None, log=None):
         self.ydoc = Y.YDoc()
         self.awareness = Awareness(self.ydoc)
-        self._update_queue = asyncio.Queue()
+        self._update_send_stream, self._update_receive_stream = create_memory_object_stream(max_buffer_size=65536)
         self._ready = False
         self.ready = ready
         self.ystore = ystore
@@ -57,7 +59,7 @@ class YRoom:
     def ready(self, value: bool) -> None:
         self._ready = value
         if value:
-            self.ydoc.observe_after_transaction(partial(put_updates, self._update_queue, self.ydoc))
+            self.ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
     @property
     def on_message(self) -> Optional[Callable]:
@@ -68,19 +70,19 @@ class YRoom:
         self._on_message = value
 
     async def _broadcast_updates(self):
-        while True:
-            update = await self._update_queue.get()
-            if self._task_group.cancel_scope.cancel_called:
-                return
-            # broadcast internal ydoc's update to all clients, that includes changes from the
-            # clients and changes from the backend (out-of-band changes)
-            for client in self.clients:
-                self.log.debug("Sending Y update to client with endpoint: %s", client.path)
-                message = create_update_message(update)
-                self._task_group.start_soon(client.send, message)
-            if self.ystore:
-                self.log.debug("Writing Y update to YStore")
-                self._task_group.start_soon(self.ystore.write, update)
+        async with self._update_receive_stream:
+            async for update in self._update_receive_stream:
+                if self._task_group.cancel_scope.cancel_called:
+                    return
+                # broadcast internal ydoc's update to all clients, that includes changes from the
+                # clients and changes from the backend (out-of-band changes)
+                for client in self.clients:
+                    self.log.debug("Sending Y update to client with endpoint: %s", client.path)
+                    message = create_update_message(update)
+                    self._task_group.start_soon(client.send, message)
+                if self.ystore:
+                    self.log.debug("Writing Y update to YStore")
+                    self._task_group.start_soon(self.ystore.write, update)
 
     def exit(self):
         self._task_group.cancel_scope.cancel()

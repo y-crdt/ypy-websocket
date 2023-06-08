@@ -230,7 +230,7 @@ class SQLiteYStore(BaseYStore):
                             yield update, metadata, timestamp
                         if not found:
                             raise YDocNotFound
-        except BaseException:
+        except Exception:
             raise YDocNotFound
 
     async def write(self, data: bytes) -> None:
