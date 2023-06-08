@@ -1,8 +1,8 @@
-import asyncio
 import json
 
 import pytest
 import y_py as Y
+from anyio import Event, create_task_group, move_on_after, sleep
 from websockets import connect  # type: ignore
 
 from ypy_websocket import WebsocketProvider
@@ -21,7 +21,7 @@ class YTest:
             self.ytest.set(t, "clock", self.clock)
 
     async def clock_run(self):
-        change = asyncio.Event()
+        change = Event()
 
         def callback(event):
             if "clock" in event.keys:
@@ -31,11 +31,14 @@ class YTest:
                     change.set()
 
         subscription_id = self.ytest.observe(callback)
-        await asyncio.wait_for(change.wait(), timeout=self.timeout)
+        async with create_task_group():
+            with move_on_after(self.timeout):
+                await change.wait()
+
         self.ytest.unobserve(subscription_id)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.parametrize("yjs_client", "0", indirect=True)
 async def test_ypy_yjs_0(yws_server, yjs_client):
     ydoc = Y.YDoc()
@@ -54,13 +57,13 @@ async def test_ypy_yjs_0(yws_server, yjs_client):
             assert v_out == v_in + 1.0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.parametrize("yjs_client", "1", indirect=True)
 async def test_ypy_yjs_1(yws_server, yjs_client):
     # wait for the JS client to connect
     tt, dt = 0, 0.1
     while True:
-        await asyncio.sleep(dt)
+        await sleep(dt)
         if "/my-roomname" in yws_server.rooms:
             break
         tt += dt

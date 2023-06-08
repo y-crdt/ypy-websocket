@@ -45,3 +45,8 @@ def yjs_client(request):
 @pytest.fixture
 def test_ydoc():
     return TestYDoc()
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
