@@ -4,6 +4,7 @@ from functools import partial
 
 import y_py as Y
 from anyio import create_memory_object_stream, create_task_group
+from anyio.abc import TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .yutils import (
@@ -20,6 +21,7 @@ class WebsocketProvider:
     _ydoc: Y.YDoc
     _update_send_stream: MemoryObjectSendStream
     _update_receive_stream: MemoryObjectReceiveStream
+    _task_group: TaskGroup
 
     def __init__(self, ydoc: Y.YDoc, websocket, log=None):
         self._ydoc = ydoc
@@ -56,3 +58,10 @@ class WebsocketProvider:
                     await self._websocket.send(message)
                 except Exception:
                     pass
+
+    async def run(self):
+        async with create_task_group() as self._task_group:
+            self._task_group.start_soon(self._run)
+
+    def stop(self):
+        self._task_group.cancel_scope.cancel()

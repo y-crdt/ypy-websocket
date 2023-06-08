@@ -3,6 +3,7 @@ import struct
 import tempfile
 import time
 from abc import ABC, abstractmethod
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import AsyncIterator, Callable, Optional, Tuple
 
@@ -34,7 +35,21 @@ class BaseYStore(ABC):
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
         ...
 
+    async def __aenter__(self):
+        async with AsyncExitStack() as exit_stack:
+            tg = anyio.create_task_group()
+            self._task_group = await exit_stack.enter_async_context(tg)
+            self._exit_stack = exit_stack.pop_all()
+            tg.start_soon(self.start)
+
+    async def __aexit__(self, exc_type, exc_value, exc_tb):
+        self._task_group.cancel_scope.cancel()
+        return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
+
     async def start(self):
+        pass
+
+    def stop(self):
         pass
 
     async def get_metadata(self) -> bytes:
@@ -182,8 +197,11 @@ class SQLiteYStore(BaseYStore):
         self.db_initialized = anyio.Event()
 
     async def start(self):
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(self._init_db)
+        async with anyio.create_task_group() as self._task_group:
+            self._task_group.start_soon(self._init_db)
+
+    def stop(self):
+        self._task_group.cancel_scope.cancel()
 
     async def _init_db(self):
         create_db = False
