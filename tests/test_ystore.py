@@ -44,6 +44,7 @@ class MySQLiteYStore(SQLiteYStore):
 async def test_ystore(YStore):
     store_name = "my_store"
     ystore = YStore(store_name, metadata_callback=MetadataCallback())
+    await ystore.start()
     data = [b"foo", b"bar", b"baz"]
     for d in data:
         await ystore.write(d)
@@ -65,6 +66,7 @@ async def test_ystore(YStore):
 async def test_document_ttl_sqlite_ystore(test_ydoc):
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, delete_db=True)
+    await ystore.start()
     now = time.time()
 
     for i in range(3):
@@ -93,6 +95,7 @@ async def test_version(YStore, caplog):
     prev_version = YStore.version
     YStore.version = -1
     ystore = YStore(store_name)
+    await ystore.start()
     await ystore.write(b"foo")
     YStore.version = prev_version
     assert "YStore version mismatch" in caplog.text

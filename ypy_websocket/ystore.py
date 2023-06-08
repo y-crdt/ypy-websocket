@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import struct
 import tempfile
@@ -35,6 +34,9 @@ class BaseYStore(ABC):
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes]]:
         ...
 
+    async def start(self):
+        pass
+
     async def get_metadata(self) -> bytes:
         metadata = b"" if not self.metadata_callback else await self.metadata_callback()
         return metadata
@@ -53,13 +55,13 @@ class FileYStore(BaseYStore):
 
     path: str
     metadata_callback: Optional[Callable]
-    lock: asyncio.Lock
+    lock: anyio.Lock
 
     def __init__(self, path: str, metadata_callback: Optional[Callable] = None, log=None):
         self.path = path
         self.metadata_callback = metadata_callback
         self.log = log or logging.getLogger(__name__)
-        self.lock = asyncio.Lock()
+        self.lock = anyio.Lock()
 
     async def check_version(self) -> int:
         if not await anyio.Path(self.path).exists():
@@ -169,17 +171,21 @@ class SQLiteYStore(BaseYStore):
     # Defaults to never purging document history (None).
     document_ttl: Optional[int] = None
     path: str
-    db_initialized: asyncio.Task
-    lock: asyncio.Lock
+    lock: anyio.Lock
+    db_initialized: anyio.Event
 
     def __init__(self, path: str, metadata_callback: Optional[Callable] = None, log=None):
         self.path = path
         self.metadata_callback = metadata_callback
         self.log = log or logging.getLogger(__name__)
-        self.lock = asyncio.Lock()
-        self.db_initialized = asyncio.create_task(self.init_db())
+        self.lock = anyio.Lock()
+        self.db_initialized = anyio.Event()
 
-    async def init_db(self):
+    async def start(self):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self._init_db)
+
+    async def _init_db(self):
         create_db = False
         move_db = False
         if not await anyio.Path(self.db_path).exists():
@@ -214,9 +220,10 @@ class SQLiteYStore(BaseYStore):
                     )
                     await db.execute(f"PRAGMA user_version = {self.version}")
                     await db.commit()
+        self.db_initialized.set()
 
     async def read(self) -> AsyncIterator[Tuple[bytes, bytes, float]]:  # type: ignore
-        await self.db_initialized
+        await self.db_initialized.wait()
         try:
             async with self.lock:
                 async with aiosqlite.connect(self.db_path) as db:
@@ -234,7 +241,7 @@ class SQLiteYStore(BaseYStore):
             raise YDocNotFound
 
     async def write(self, data: bytes) -> None:
-        await self.db_initialized
+        await self.db_initialized.wait()
         async with self.lock:
             async with aiosqlite.connect(self.db_path) as db:
                 # first, determine time elapsed since last update
