@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from contextlib import AsyncExitStack
 from functools import partial
@@ -26,7 +25,9 @@ class WebsocketProvider:
         self._ydoc = ydoc
         self._websocket = websocket
         self.log = log or logging.getLogger(__name__)
-        self._update_send_stream, self._update_receive_stream = create_memory_object_stream(max_buffer_size=65536)
+        self._update_send_stream, self._update_receive_stream = create_memory_object_stream(
+            max_buffer_size=65536
+        )
         ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
     async def __aenter__(self):

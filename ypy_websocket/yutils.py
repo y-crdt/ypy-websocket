@@ -1,11 +1,10 @@
-import asyncio
 from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
 import anyio
-from anyio.streams.memory import MemoryObjectSendStream
 import y_py as Y
+from anyio.streams.memory import MemoryObjectSendStream
 
 
 class YMessageType(IntEnum):
@@ -98,12 +97,10 @@ class Decoder:
 
 
 def put_updates(update_send_stream: MemoryObjectSendStream, event: Y.AfterTransactionEvent) -> None:
-    cloned_update_send_stream = update_send_stream.clone()
-    with cloned_update_send_stream:
-        try:
-            cloned_update_send_stream.send_nowait(event.get_update())
-        except anyio.BrokenResourceError:
-            pass
+    try:
+        update_send_stream.send_nowait(event.get_update())
+    except Exception:
+        pass
 
 
 async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> None:

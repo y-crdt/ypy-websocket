@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from functools import partial
 from typing import Callable, Dict, List, Optional
@@ -34,7 +33,9 @@ class YRoom:
     def __init__(self, ready: bool = True, ystore: Optional[BaseYStore] = None, log=None):
         self.ydoc = Y.YDoc()
         self.awareness = Awareness(self.ydoc)
-        self._update_send_stream, self._update_receive_stream = create_memory_object_stream(max_buffer_size=65536)
+        self._update_send_stream, self._update_receive_stream = create_memory_object_stream(
+            max_buffer_size=65536
+        )
         self._ready = False
         self.ready = ready
         self.ystore = ystore
