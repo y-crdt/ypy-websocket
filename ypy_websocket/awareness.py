@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 from .yutils import Decoder, read_message
 
@@ -11,7 +13,7 @@ class Awareness:
         self.meta = {}
         self.states = {}
 
-    def get_changes(self, message: bytes) -> Dict[str, Any]:
+    def get_changes(self, message: bytes) -> dict[str, Any]:
         message = read_message(message)
         decoder = Decoder(message)
         timestamp = int(time.time() * 1000)

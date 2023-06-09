@@ -54,7 +54,7 @@ class WebsocketServer:
         if name is None:
             name = self.get_room_name(room)
         room = self.rooms[name]
-        room.exit()
+        room.stop()
         del self.rooms[name]
 
     async def serve(self, websocket):

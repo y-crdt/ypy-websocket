@@ -7,7 +7,7 @@ import time
 from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import AsyncIterator, Callable, Optional, Tuple
+from typing import AsyncIterator, Callable
 
 import aiosqlite
 import anyio

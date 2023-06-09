@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import Callable, List, Optional
+from typing import Callable
 
 import y_py as Y
 from anyio import Event, create_memory_object_stream, create_task_group

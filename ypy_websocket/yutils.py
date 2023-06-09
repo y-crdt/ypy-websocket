@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
 
 import anyio
 import y_py as Y
@@ -70,7 +71,7 @@ class Decoder:
                 break
         return uint
 
-    def read_message(self) -> Optional[bytes]:
+    def read_message(self) -> bytes | None:
         if self.length == 0:
             return None
         length = self.read_var_uint()
