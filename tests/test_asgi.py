@@ -15,7 +15,7 @@ async def test_asgi(unused_tcp_port):
     # server
     config = uvicorn.Config("test_asgi:app", port=unused_tcp_port, log_level="info")
     server = uvicorn.Server(config)
-    async with create_task_group() as tg:
+    async with create_task_group() as tg, websocket_server:
         tg.start_soon(server.serve)
         while not server.started:
             await sleep(0)

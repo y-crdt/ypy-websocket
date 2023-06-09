@@ -1,7 +1,10 @@
-import logging
-from typing import Dict, Optional
+from __future__ import annotations
 
-from anyio import create_task_group
+import logging
+from contextlib import AsyncExitStack
+
+from anyio import TASK_STATUS_IGNORED, Event, create_task_group
+from anyio.abc import TaskGroup, TaskStatus
 
 from .yroom import YRoom
 from .yutils import YMessageType, process_sync_message, sync
@@ -10,13 +13,15 @@ from .yutils import YMessageType, process_sync_message, sync
 class WebsocketServer:
 
     auto_clean_rooms: bool
-    rooms: Dict[str, YRoom]
+    rooms: dict[str, YRoom]
+    _task_group: TaskGroup | None
 
     def __init__(self, rooms_ready: bool = True, auto_clean_rooms: bool = True, log=None):
         self.rooms_ready = rooms_ready
         self.auto_clean_rooms = auto_clean_rooms
         self.log = log or logging.getLogger(__name__)
         self.rooms = {}
+        self._task_group = None
 
     def get_room(self, path: str) -> YRoom:
         if path not in self.rooms.keys():
@@ -27,7 +32,7 @@ class WebsocketServer:
         return list(self.rooms.keys())[list(self.rooms.values()).index(room)]
 
     def rename_room(
-        self, to_name: str, *, from_name: Optional[str] = None, from_room: Optional[YRoom] = None
+        self, to_name: str, *, from_name: str | None = None, from_room: YRoom | None = None
     ):
         if from_name is not None and from_room is not None:
             raise RuntimeError("Cannot pass from_name and from_room")
@@ -35,7 +40,7 @@ class WebsocketServer:
             from_name = self.get_room_name(from_room)
         self.rooms[to_name] = self.rooms.pop(from_name)
 
-    def delete_room(self, *, name: Optional[str] = None, room: Optional[YRoom] = None):
+    def delete_room(self, *, name: str | None = None, room: YRoom | None = None):
         if name is not None and room is not None:
             raise RuntimeError("Cannot pass name and room")
         if name is None:
@@ -45,6 +50,14 @@ class WebsocketServer:
         del self.rooms[name]
 
     async def serve(self, websocket):
+        if self._task_group is None:
+            raise RuntimeError(
+                "The WebsocketServer is not running: use `async with websocket_server:` or `await websocket_server.run()`"
+            )
+
+        await self._task_group.start(self._serve, websocket)
+
+    async def _serve(self, websocket, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
         async with create_task_group() as tg:
             room = self.get_room(websocket.path)
             tg.start_soon(room.enter)
@@ -89,3 +102,22 @@ class WebsocketServer:
             if self.auto_clean_rooms and not room.clients:
                 self.delete_room(room=room)
             tg.cancel_scope.cancel()
+            task_status.started()
+
+    async def __aenter__(self):
+        async with AsyncExitStack() as exit_stack:
+            tg = create_task_group()
+            self._task_group = await exit_stack.enter_async_context(tg)
+            self._exit_stack = exit_stack.pop_all()
+
+    async def __aexit__(self, exc_type, exc_value, exc_tb):
+        self._task_group.cancel_scope.cancel()
+        return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
+
+    async def run(self):
+        async with create_task_group() as self._task_group:
+            # wait forever
+            self._task_group.start_soon(Event().wait)
+
+    def stop(self):
+        self._task_group.cancel_scope.cancel()
