@@ -104,8 +104,8 @@ class WebsocketServer:
                                 client.path,
                             )
                             tg.start_soon(client.send, message)
-            except Exception:
-                pass
+            except Exception as e:
+                self.log.debug("Error serving endpoint: %s", websocket.path, exc_info=e)
 
             # remove this client
             room.clients = [c for c in room.clients if c != websocket]
@@ -125,6 +125,9 @@ class WebsocketServer:
             self.started.set()
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
+        if self._task_group is None:
+            raise RuntimeError("WebsocketServer not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
@@ -139,5 +142,8 @@ class WebsocketServer:
             self.started.set()
 
     def stop(self):
+        if self._task_group is None:
+            raise RuntimeError("WebsocketServer not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None

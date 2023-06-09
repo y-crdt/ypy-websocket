@@ -55,6 +55,9 @@ class WebsocketProvider:
             self.started.set()
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
+        if self._task_group is None:
+            raise RuntimeError("WebsocketProvider not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
@@ -84,5 +87,8 @@ class WebsocketProvider:
             self.started.set()
 
     def stop(self):
+        if self._task_group is None:
+            raise RuntimeError("WebsocketProvider not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None

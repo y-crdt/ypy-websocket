@@ -58,6 +58,9 @@ class BaseYStore(ABC):
             tg.start_soon(self.start)
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
+        if self._task_group is None:
+            raise RuntimeError("YStore not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
@@ -69,6 +72,9 @@ class BaseYStore(ABC):
         self.started.set()
 
     def stop(self):
+        if self._task_group is None:
+            raise RuntimeError("YStore not running")
+
         self._task_group.cancel_scope.cancel()
         self._task_group = None
 
