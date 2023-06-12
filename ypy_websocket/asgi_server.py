@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable
 from .websocket_server import WebsocketServer
 
 
-class WebSocket:
+class ASGIWebsocket:
     def __init__(
         self,
         receive: Callable[[], Awaitable[dict[str, Any]]],
@@ -47,13 +47,22 @@ class WebSocket:
         return b""
 
 
-class Server:
+class ASGIServer:
+    """ASGI server."""
+
     def __init__(
         self,
         websocket_server: WebsocketServer,
         on_connect: Callable[[dict[str, Any], dict[str, Any]], Awaitable[bool]] | None = None,
         on_disconnect: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ):
+        """Initialize the object.
+
+        Arguments:
+            websocket_server: An instance of WebsocketServer.
+            on_connect: An async callback called when connecting the WebSocket. If the callback returns True, the WebSocket is not accepted.
+            on_disconnect: an async callback called when disconnecting the WebSocket.
+        """
         self._websocket_server = websocket_server
         self._on_connect = on_connect
         self._on_disconnect = on_disconnect
@@ -72,5 +81,5 @@ class Server:
                     return
 
             await send({"type": "websocket.accept"})
-            websocket = WebSocket(receive, send, scope["path"], self._on_disconnect)
+            websocket = ASGIWebsocket(receive, send, scope["path"], self._on_disconnect)
             await self._websocket_server.serve(websocket)

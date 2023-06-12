@@ -90,7 +90,7 @@ class YRoom:
             self._task_group = await exit_stack.enter_async_context(tg)
             self._exit_stack = exit_stack.pop_all()
             tg.start_soon(self._broadcast_updates)
-            self._started.set()
+            self.started.set()
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if self._task_group is None:
@@ -106,7 +106,7 @@ class YRoom:
 
         async with create_task_group() as self._task_group:
             self._task_group.start_soon(self._broadcast_updates)
-            self._started.set()
+            self.started.set()
 
     def stop(self):
         if self._task_group is None:

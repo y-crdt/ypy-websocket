@@ -42,6 +42,11 @@ test = [
     "websockets >=10.0",
     "uvicorn",
 ]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings-python",
+]
 
 [project.urls]
 Homepage = "https://github.com/y-crdt/ypy-websocket"

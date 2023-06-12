@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import logging
 from contextlib import AsyncExitStack
 from functools import partial
+from logging import Logger, getLogger
 
 import y_py as Y
 from anyio import Event, create_memory_object_stream, create_task_group
 from anyio.abc import TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
+from .websocket import Websocket
 from .yutils import (
     YMessageType,
     create_update_message,
@@ -19,6 +20,7 @@ from .yutils import (
 
 
 class WebsocketProvider:
+    """WebSocket provider."""
 
     _ydoc: Y.YDoc
     _update_send_stream: MemoryObjectSendStream
@@ -26,10 +28,30 @@ class WebsocketProvider:
     _started: Event | None
     _task_group: TaskGroup | None
 
-    def __init__(self, ydoc: Y.YDoc, websocket, log=None):
+    def __init__(self, ydoc: Y.YDoc, websocket: Websocket, log: Logger | None = None) -> None:
+        """Initialize the object.
+
+        The WebsocketProvider instance should preferably be used as an async context manager:
+        ```py
+        async with websocket_provider:
+            ...
+        ```
+        However, a lower-level API can also be used:
+        ```py
+        task = asyncio.create_task(websocket_provider.start())
+        await websocket_provider.started.wait()
+        ...
+        websocket_provider.stop()
+        ```
+
+        Arguments:
+            ydoc: The YDoc to connect through the WebSocket.
+            websocket: The WebSocket through which to connect the YDoc.
+            log: An optional logger.
+        """
         self._ydoc = ydoc
         self._websocket = websocket
-        self.log = log or logging.getLogger(__name__)
+        self.log = log or getLogger(__name__)
         self._update_send_stream, self._update_receive_stream = create_memory_object_stream(
             max_buffer_size=65536
         )
@@ -38,7 +60,8 @@ class WebsocketProvider:
         ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
     @property
-    def started(self):
+    def started(self) -> Event:
+        """An async event that is set when the WebSocket provider has started."""
         if self._started is None:
             self._started = Event()
         return self._started
@@ -79,6 +102,7 @@ class WebsocketProvider:
                     pass
 
     async def start(self):
+        """Start the WebSocket provider."""
         if self._task_group is not None:
             raise RuntimeError("WebsocketProvider already running")
 
@@ -87,6 +111,7 @@ class WebsocketProvider:
             self.started.set()
 
     def stop(self):
+        """Stop the WebSocket provider."""
         if self._task_group is None:
             raise RuntimeError("WebsocketProvider not running")
 
