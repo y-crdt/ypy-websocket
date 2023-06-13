@@ -81,7 +81,7 @@ class YRoom:
                     self.log.debug("Writing Y update to YStore")
                     self._task_group.start_soon(self.ystore.write, update)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> YRoom:
         if self._task_group is not None:
             raise RuntimeError("YRoom already running")
 
@@ -91,6 +91,8 @@ class YRoom:
             self._exit_stack = exit_stack.pop_all()
             tg.start_soon(self._broadcast_updates)
             self.started.set()
+
+        return self
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if self._task_group is None:

@@ -177,7 +177,7 @@ class WebsocketServer:
             tg.cancel_scope.cancel()
             task_status.started()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> WebsocketServer:
         if self._task_group is not None:
             raise RuntimeError("WebsocketServer already running")
 
@@ -186,6 +186,8 @@ class WebsocketServer:
             self._task_group = await exit_stack.enter_async_context(tg)
             self._exit_stack = exit_stack.pop_all()
             self.started.set()
+
+        return self
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if self._task_group is None:

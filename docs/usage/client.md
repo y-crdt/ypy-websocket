@@ -1,3 +1,5 @@
+A client connects their `YDoc` through a [WebsocketProvider](../reference/WebSocket_provider.md).
+
 Here is a code example using the [websockets](https://websockets.readthedocs.io) library:
 ```py
 import asyncio

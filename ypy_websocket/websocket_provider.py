@@ -66,7 +66,7 @@ class WebsocketProvider:
             self._started = Event()
         return self._started
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> WebsocketProvider:
         if self._task_group is not None:
             raise RuntimeError("WebsocketProvider already running")
 
@@ -76,6 +76,8 @@ class WebsocketProvider:
             self._exit_stack = exit_stack.pop_all()
             tg.start_soon(self._run)
             self.started.set()
+
+        return self
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if self._task_group is None:
