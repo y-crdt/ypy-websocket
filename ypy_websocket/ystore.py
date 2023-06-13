@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 import struct
 import tempfile
 import time
 from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
+from inspect import isawaitable
+from logging import Logger, getLogger
 from pathlib import Path
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Awaitable, Callable, cast
 
 import aiosqlite
 import anyio
@@ -24,13 +25,13 @@ class YDocNotFound(Exception):
 
 class BaseYStore(ABC):
 
-    metadata_callback: Callable | None = None
+    metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None
     version = 2
     _started: Event | None = None
     _task_group: TaskGroup | None = None
 
     @abstractmethod
-    def __init__(self, path: str, metadata_callback=None):
+    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None):
         ...
 
     @abstractmethod
@@ -67,13 +68,15 @@ class BaseYStore(ABC):
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
 
-    async def start(self):
+    async def start(self) -> None:
+        """Start the store."""
         if self._task_group is not None:
             raise RuntimeError("YStore already running")
 
         self.started.set()
 
-    def stop(self):
+    def stop(self) -> None:
+        """Stop the store."""
         if self._task_group is None:
             raise RuntimeError("YStore not running")
 
@@ -81,14 +84,34 @@ class BaseYStore(ABC):
         self._task_group = None
 
     async def get_metadata(self) -> bytes:
-        metadata = b"" if not self.metadata_callback else await self.metadata_callback()
+        """
+        Returns:
+            The metadata.
+        """
+        if self.metadata_callback is None:
+            return b""
+
+        metadata = self.metadata_callback()
+        if isawaitable(metadata):
+            metadata = await metadata
+        metadata = cast(bytes, metadata)
         return metadata
 
-    async def encode_state_as_update(self, ydoc: Y.YDoc):
+    async def encode_state_as_update(self, ydoc: Y.YDoc) -> None:
+        """Store a YDoc state.
+
+        Arguments:
+            ydoc: the YDoc from which to store the state.
+        """
         update = Y.encode_state_as_update(ydoc)  # type: ignore
         await self.write(update)
 
-    async def apply_updates(self, ydoc: Y.YDoc):
+    async def apply_updates(self, ydoc: Y.YDoc) -> None:
+        """Apply all stored updates to the YDoc.
+
+        Arguments:
+            ydoc: the YDoc on which to apply the updates.
+        """
         async for update, *rest in self.read():  # type: ignore
             Y.apply_update(ydoc, update)  # type: ignore
 
@@ -97,16 +120,28 @@ class FileYStore(BaseYStore):
     """A YStore which uses one file per document."""
 
     path: str
-    metadata_callback: Callable | None
+    metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None
     lock: Lock
 
-    def __init__(self, path: str, metadata_callback: Callable | None = None, log=None):
+    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None) -> None:
+        """Initialize the object.
+
+        Arguments:
+            path: the file path used to store the updates.
+            metadata_callback: The callback to call to get the metadata, if any.
+            log: An optional logger.
+        """
         self.path = path
         self.metadata_callback = metadata_callback
-        self.log = log or logging.getLogger(__name__)
+        self.log = log or getLogger(__name__)
         self.lock = Lock()
 
     async def check_version(self) -> int:
+        """Check the version of the store format.
+
+        Returns:
+            The offset where the data is located in the file.
+        """
         if not await anyio.Path(self.path).exists():
             version_mismatch = True
         else:
@@ -136,6 +171,11 @@ class FileYStore(BaseYStore):
         return offset
 
     async def read(self) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore
+        """Async iterator for reading the store content.
+
+        Returns:
+            A tuple of (update, metadata, timestamp) for each update.
+        """
         async with self.lock:
             if not await anyio.Path(self.path).exists():
                 raise YDocNotFound
@@ -157,6 +197,11 @@ class FileYStore(BaseYStore):
             i = (i + 1) % 3
 
     async def write(self, data: bytes) -> None:
+        """Store an update.
+
+        Arguments:
+            data: The update to store.
+        """
         parent = Path(self.path).parent
         async with self.lock:
             await anyio.Path(parent).mkdir(parents=True, exist_ok=True)
@@ -177,24 +222,40 @@ class TempFileYStore(FileYStore):
     Files are writen under a common directory.
     To prefix the directory name (e.g. /tmp/my_prefix_b4whmm7y/):
 
+    ```py
     class PrefixTempFileYStore(TempFileYStore):
         prefix_dir = "my_prefix_"
+    ```
     """
 
     prefix_dir: str | None = None
     base_dir: str | None = None
 
-    def __init__(self, path: str, metadata_callback: Callable | None = None, log=None):
+    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None):
+        """Initialize the object.
+
+        Arguments:
+            path: the file path used to store the updates.
+            metadata_callback: The callback to call to get the metadata, if any.
+            log: An optional logger.
+        """
         full_path = str(Path(self.get_base_dir()) / path)
         super().__init__(full_path, metadata_callback=metadata_callback, log=log)
 
     def get_base_dir(self) -> str:
+        """Get the base directory where the update file is written.
+
+        Returns:
+            The base directory path.
+        """
         if self.base_dir is None:
             self.make_directory()
         assert self.base_dir is not None
         return self.base_dir
 
     def make_directory(self):
+        """Create the base directory where the update file is written.
+        """
         type(self).base_dir = tempfile.mkdtemp(prefix=self.prefix_dir)
 
 
@@ -204,8 +265,10 @@ class SQLiteYStore(BaseYStore):
 
     Subclass to point to your database file:
 
+    ```py
     class MySQLiteYStore(SQLiteYStore):
         db_path = "path/to/my_ystore.db"
+    ```
     """
 
     db_path: str = "ystore.db"
@@ -217,14 +280,22 @@ class SQLiteYStore(BaseYStore):
     lock: Lock
     db_initialized: Event
 
-    def __init__(self, path: str, metadata_callback: Callable | None = None, log=None):
+    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None) -> None:
+        """Initialize the object.
+
+        Arguments:
+            path: the file path used to store the updates.
+            metadata_callback: The callback to call to get the metadata, if any.
+            log: An optional logger.
+        """
         self.path = path
         self.metadata_callback = metadata_callback
-        self.log = log or logging.getLogger(__name__)
+        self.log = log or getLogger(__name__)
         self.lock = Lock()
         self.db_initialized = Event()
 
-    async def start(self):
+    async def start(self) -> None:
+        """Start the SQLiteYStore."""
         if self._task_group is not None:
             raise RuntimeError("YStore already running")
 
@@ -270,6 +341,11 @@ class SQLiteYStore(BaseYStore):
         self.db_initialized.set()
 
     async def read(self) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore
+        """Async iterator for reading the store content.
+
+        Returns:
+            A tuple of (update, metadata, timestamp) for each update.
+        """
         await self.db_initialized.wait()
         try:
             async with self.lock:
@@ -288,6 +364,11 @@ class SQLiteYStore(BaseYStore):
             raise YDocNotFound
 
     async def write(self, data: bytes) -> None:
+        """Store an update.
+
+        Arguments:
+            data: The update to store.
+        """
         await self.db_initialized.wait()
         async with self.lock:
             async with aiosqlite.connect(self.db_path) as db:
