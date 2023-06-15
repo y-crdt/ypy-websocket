@@ -42,6 +42,7 @@ nav:
   - reference/Store.md
 
 markdown_extensions:
+  - pymdownx.snippets
   - admonition
   - pymdownx.details
   - pymdownx.superfences:
