@@ -141,9 +141,8 @@ class WebsocketServer:
                     # filter messages (e.g. awareness)
                     skip = False
                     if room.on_message:
-                        skip = room.on_message(message)
-                        if isawaitable(skip):
-                            skip = await skip
+                        _skip = room.on_message(message)
+                        skip = await _skip if isawaitable(_skip) else _skip
                     if skip:
                         continue
                     message_type = message[0]

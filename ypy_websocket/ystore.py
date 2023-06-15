@@ -103,7 +103,7 @@ class BaseYStore(ABC):
         """Store a YDoc state.
 
         Arguments:
-            ydoc: the YDoc from which to store the state.
+            ydoc: The YDoc from which to store the state.
         """
         update = Y.encode_state_as_update(ydoc)  # type: ignore
         await self.write(update)
@@ -112,7 +112,7 @@ class BaseYStore(ABC):
         """Apply all stored updates to the YDoc.
 
         Arguments:
-            ydoc: the YDoc on which to apply the updates.
+            ydoc: The YDoc on which to apply the updates.
         """
         async for update, *rest in self.read():  # type: ignore
             Y.apply_update(ydoc, update)  # type: ignore
@@ -134,8 +134,8 @@ class FileYStore(BaseYStore):
         """Initialize the object.
 
         Arguments:
-            path: the file path used to store the updates.
-            metadata_callback: The callback to call to get the metadata, if any.
+            path: The file path used to store the updates.
+            metadata_callback: An optional callback to call to get the metadata.
             log: An optional logger.
         """
         self.path = path
@@ -247,8 +247,8 @@ class TempFileYStore(FileYStore):
         """Initialize the object.
 
         Arguments:
-            path: the file path used to store the updates.
-            metadata_callback: The callback to call to get the metadata, if any.
+            path: The file path used to store the updates.
+            metadata_callback: An optional callback to call to get the metadata.
             log: An optional logger.
         """
         full_path = str(Path(self.get_base_dir()) / path)
@@ -300,8 +300,8 @@ class SQLiteYStore(BaseYStore):
         """Initialize the object.
 
         Arguments:
-            path: the file path used to store the updates.
-            metadata_callback: The callback to call to get the metadata, if any.
+            path: The file path used to store the updates.
+            metadata_callback: An optional callback to call to get the metadata.
             log: An optional logger.
         """
         self.path = path

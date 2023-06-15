@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from functools import partial
 from logging import Logger, getLogger
-from typing import Callable
+from typing import Awaitable, Callable
 
 import y_py as Y
 from anyio import Event, create_memory_object_stream, create_task_group
@@ -20,7 +20,7 @@ class YRoom:
     clients: list
     ydoc: Y.YDoc
     ystore: BaseYStore | None
-    _on_message: Callable[[bytes], bool] | None
+    _on_message: Callable[[bytes], Awaitable[bool] | bool] | None
     _update_send_stream: MemoryObjectSendStream
     _update_receive_stream: MemoryObjectReceiveStream
     _ready: bool
@@ -66,7 +66,7 @@ class YRoom:
 
     @property
     def started(self):
-        """An async event that is set when the WebSocket provider has started."""
+        """An async event that is set when the YRoom provider has started."""
         if self._started is None:
             self._started = Event()
         return self._started
@@ -88,17 +88,17 @@ class YRoom:
             self.ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
     @property
-    def on_message(self) -> Callable[[bytes], bool] | None:
+    def on_message(self) -> Callable[[bytes], Awaitable[bool] | bool] | None:
         """
         Returns:
-            The callback called when a message was received, if any.
+            The optional callback to call when a message is received.
         """
         return self._on_message
 
     @on_message.setter
-    def on_message(self, value: Callable[[bytes], bool] | None):
+    def on_message(self, value: Callable[[bytes], Awaitable[bool] | bool] | None):
         """Arguments:
-        value: the callback to call when a message is received. If the callback returns True, the message is skipped.
+        value: An optional callback to call when a message is received. If the callback returns True, the message is skipped.
         """
         self._on_message = value
 
