@@ -31,7 +31,9 @@ class BaseYStore(ABC):
     _task_group: TaskGroup | None = None
 
     @abstractmethod
-    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None):
+    def __init__(
+        self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None
+    ):
         ...
 
     @abstractmethod
@@ -123,7 +125,12 @@ class FileYStore(BaseYStore):
     metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None
     lock: Lock
 
-    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None) -> None:
+    def __init__(
+        self,
+        path: str,
+        metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None,
+        log: Logger | None = None,
+    ) -> None:
         """Initialize the object.
 
         Arguments:
@@ -231,7 +238,12 @@ class TempFileYStore(FileYStore):
     prefix_dir: str | None = None
     base_dir: str | None = None
 
-    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None):
+    def __init__(
+        self,
+        path: str,
+        metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None,
+        log: Logger | None = None,
+    ):
         """Initialize the object.
 
         Arguments:
@@ -254,8 +266,7 @@ class TempFileYStore(FileYStore):
         return self.base_dir
 
     def make_directory(self):
-        """Create the base directory where the update file is written.
-        """
+        """Create the base directory where the update file is written."""
         type(self).base_dir = tempfile.mkdtemp(prefix=self.prefix_dir)
 
 
@@ -280,7 +291,12 @@ class SQLiteYStore(BaseYStore):
     lock: Lock
     db_initialized: Event
 
-    def __init__(self, path: str, metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None, log: Logger | None = None) -> None:
+    def __init__(
+        self,
+        path: str,
+        metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None,
+        log: Logger | None = None,
+    ) -> None:
         """Initialize the object.
 
         Arguments:

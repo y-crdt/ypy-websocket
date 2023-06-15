@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from logging import Logger, getLogger
 from contextlib import AsyncExitStack
 from functools import partial
+from logging import Logger, getLogger
 from typing import Callable
 
 import y_py as Y
@@ -27,7 +27,9 @@ class YRoom:
     _task_group: TaskGroup | None
     _started: Event | None
 
-    def __init__(self, ready: bool = True, ystore: BaseYStore | None = None, log: Logger | None = None):
+    def __init__(
+        self, ready: bool = True, ystore: BaseYStore | None = None, log: Logger | None = None
+    ):
         """Initialize the object.
 
         The YRoom instance should preferably be used as an async context manager:
@@ -80,7 +82,7 @@ class YRoom:
     @ready.setter
     def ready(self, value: bool) -> None:
         """Arguments:
-            value: True if the internal YDoc is ready to be synchronized, False otherwise."""
+        value: True if the internal YDoc is ready to be synchronized, False otherwise."""
         self._ready = value
         if value:
             self.ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
@@ -96,7 +98,7 @@ class YRoom:
     @on_message.setter
     def on_message(self, value: Callable[[bytes], bool] | None):
         """Arguments:
-            value: the callback to call when a message is received. If the callback returns True, the message is skipped.
+        value: the callback to call when a message is received. If the callback returns True, the message is skipped.
         """
         self._on_message = value
 
