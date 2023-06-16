@@ -7,7 +7,7 @@ Ypy-websocket is an async WebSocket connector for Ypy.
 
 ---
 
-**Documentation**: <a href="https://davidbrochart.github.io/ypy-websocket target="_blank">https://davidbrochart.github.io/ypy-websocket</a>
+**Documentation**: <a href="https://davidbrochart.github.io/ypy-websocket" target="_blank">https://davidbrochart.github.io/ypy-websocket</a>
 
 **Source Code**: <a href="https://github.com/y-crdt/ypy-websocket" target="_blank">https://github.com/y-crdt/ypy-websocket</a>
 
