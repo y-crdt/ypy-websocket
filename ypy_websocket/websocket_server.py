@@ -9,7 +9,6 @@ from anyio.abc import TaskGroup, TaskStatus
 
 from .websocket import Websocket
 from .yroom import YRoom
-from .yutils import YMessageType, process_sync_message, sync
 
 
 class WebsocketServer:
@@ -134,45 +133,8 @@ class WebsocketServer:
             if not room.started.is_set():
                 tg.start_soon(room.start)
                 await room.started.wait()
-            room.clients.append(websocket)
-            await sync(room.ydoc, websocket, self.log)
-            try:
-                async for message in websocket:
-                    # filter messages (e.g. awareness)
-                    skip = False
-                    if room.on_message:
-                        _skip = room.on_message(message)
-                        skip = await _skip if isawaitable(_skip) else _skip
-                    if skip:
-                        continue
-                    message_type = message[0]
-                    if message_type == YMessageType.SYNC:
-                        # update our internal state in the background
-                        # changes to the internal state are then forwarded to all clients
-                        # and stored in the YStore (if any)
-                        tg.start_soon(
-                            process_sync_message, message[1:], room.ydoc, websocket, self.log
-                        )
-                    elif message_type == YMessageType.AWARENESS:
-                        # forward awareness messages from this client to all clients,
-                        # including itself, because it's used to keep the connection alive
-                        self.log.debug(
-                            "Received %s message from endpoint: %s",
-                            YMessageType.AWARENESS.name,
-                            websocket.path,
-                        )
-                        for client in room.clients:
-                            self.log.debug(
-                                "Sending Y awareness from client with endpoint %s to client with endpoint: %s",
-                                websocket.path,
-                                client.path,
-                            )
-                            tg.start_soon(client.send, message)
-            except Exception as e:
-                self.log.debug("Error serving endpoint: %s", websocket.path, exc_info=e)
+            await room.serve(websocket)
 
-            # remove this client
-            room.clients = [c for c in room.clients if c != websocket]
             if self.auto_clean_rooms and not room.clients:
                 self.delete_room(room=room)
             tg.cancel_scope.cancel()

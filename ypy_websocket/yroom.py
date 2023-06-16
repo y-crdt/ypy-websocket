@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import AsyncExitStack
 from functools import partial
+from inspect import isawaitable
 from logging import Logger, getLogger
 from typing import Awaitable, Callable
 
@@ -11,8 +12,15 @@ from anyio.abc import TaskGroup
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .awareness import Awareness
+from .websocket import Websocket
 from .ystore import BaseYStore
-from .yutils import create_update_message, put_updates
+from .yutils import (
+    YMessageType,
+    create_update_message,
+    process_sync_message,
+    put_updates,
+    sync,
+)
 
 
 class YRoom:
@@ -154,3 +162,50 @@ class YRoom:
 
         self._task_group.cancel_scope.cancel()
         self._task_group = None
+
+    async def serve(self, websocket: Websocket):
+        """Serve a client.
+
+        Arguments:
+            websocket: The WebSocket through which to serve the client.
+        """
+        async with create_task_group() as tg:
+            self.clients.append(websocket)
+            await sync(self.ydoc, websocket, self.log)
+            try:
+                async for message in websocket:
+                    # filter messages (e.g. awareness)
+                    skip = False
+                    if self.on_message:
+                        _skip = self.on_message(message)
+                        skip = await _skip if isawaitable(_skip) else _skip
+                    if skip:
+                        continue
+                    message_type = message[0]
+                    if message_type == YMessageType.SYNC:
+                        # update our internal state in the background
+                        # changes to the internal state are then forwarded to all clients
+                        # and stored in the YStore (if any)
+                        tg.start_soon(
+                            process_sync_message, message[1:], self.ydoc, websocket, self.log
+                        )
+                    elif message_type == YMessageType.AWARENESS:
+                        # forward awareness messages from this client to all clients,
+                        # including itself, because it's used to keep the connection alive
+                        self.log.debug(
+                            "Received %s message from endpoint: %s",
+                            YMessageType.AWARENESS.name,
+                            websocket.path,
+                        )
+                        for client in self.clients:
+                            self.log.debug(
+                                "Sending Y awareness from client with endpoint %s to client with endpoint: %s",
+                                websocket.path,
+                                client.path,
+                            )
+                            tg.start_soon(client.send, message)
+            except Exception as e:
+                self.log.debug("Error serving endpoint: %s", websocket.path, exc_info=e)
+
+            # remove this client
+            self.clients = [c for c in self.clients if c != websocket]
