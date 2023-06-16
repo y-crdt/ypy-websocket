@@ -1,10 +1,11 @@
-import asyncio
+from __future__ import annotations
+
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
 
 import anyio
 import y_py as Y
+from anyio.streams.memory import MemoryObjectSendStream
 
 
 class YMessageType(IntEnum):
@@ -70,7 +71,7 @@ class Decoder:
                 break
         return uint
 
-    def read_message(self) -> Optional[bytes]:
+    def read_message(self) -> bytes | None:
         if self.length == 0:
             return None
         length = self.read_var_uint()
@@ -96,8 +97,11 @@ class Decoder:
         return message.decode("utf-8")
 
 
-def put_updates(update_queue: asyncio.Queue, ydoc: Y.YDoc, event: Y.AfterTransactionEvent) -> None:
-    update_queue.put_nowait(event.get_update())
+def put_updates(update_send_stream: MemoryObjectSendStream, event: Y.AfterTransactionEvent) -> None:
+    try:
+        update_send_stream.send_nowait(event.get_update())
+    except Exception:
+        pass
 
 
 async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> None:

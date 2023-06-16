@@ -1,4 +1,3 @@
-import asyncio
 import os
 import tempfile
 import time
@@ -15,11 +14,10 @@ class MetadataCallback:
     def __init__(self):
         self.i = 0
 
-    def __call__(self):
-        future = asyncio.Future()
-        future.set_result(str(self.i).encode())
+    async def __call__(self):
+        res = str(self.i).encode()
         self.i += 1
-        return future
+        return res
 
 
 class MyTempFileYStore(TempFileYStore):
@@ -39,11 +37,12 @@ class MySQLiteYStore(SQLiteYStore):
         super().__init__(*args, **kwargs)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.parametrize("YStore", (MyTempFileYStore, MySQLiteYStore))
 async def test_ystore(YStore):
     store_name = "my_store"
     ystore = YStore(store_name, metadata_callback=MetadataCallback())
+    await ystore.start()
     data = [b"foo", b"bar", b"baz"]
     for d in data:
         await ystore.write(d)
@@ -61,10 +60,11 @@ async def test_ystore(YStore):
     assert i == len(data)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_document_ttl_sqlite_ystore(test_ydoc):
     store_name = "my_store"
     ystore = MySQLiteYStore(store_name, delete_db=True)
+    await ystore.start()
     now = time.time()
 
     for i in range(3):
@@ -86,13 +86,14 @@ async def test_document_ttl_sqlite_ystore(test_ydoc):
             assert (await (await db.execute("SELECT count(*) FROM yupdates")).fetchone())[0] == 2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.parametrize("YStore", (MyTempFileYStore, MySQLiteYStore))
 async def test_version(YStore, caplog):
     store_name = "my_store"
     prev_version = YStore.version
     YStore.version = -1
     ystore = YStore(store_name)
+    await ystore.start()
     await ystore.write(b"foo")
     YStore.version = prev_version
     assert "YStore version mismatch" in caplog.text

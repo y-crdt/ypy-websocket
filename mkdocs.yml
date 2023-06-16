@@ -1,0 +1,56 @@
+site_name: ypy-websocket
+site_description: Async WebSocket connector for Ypy
+repo_url: https://github.com/y-crdt/ypy-websocket
+
+theme:
+  name: 'material'
+  palette:
+    - scheme: default
+      primary: 'black'
+      accent: 'black'
+      toggle:
+          icon: material/lightbulb-outline
+          name: Switch to dark mode
+    - scheme: slate
+      primary: 'black'
+      accent: 'black'
+      toggle:
+          icon: material/lightbulb
+          name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.top
+    - navigation.sections
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.code.copy
+
+nav:
+- Overview: index.md
+- install.md
+- Usage:
+  - usage/client.md
+  - usage/server.md
+  - usage/WebSocket_API.md
+- Code Reference:
+  - reference/WebSocket_provider.md
+  - reference/WebSocket_server.md
+  - reference/ASGI_server.md
+  - reference/WebSocket.md
+  - reference/Room.md
+  - reference/Store.md
+
+markdown_extensions:
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+- mkdocstrings:
+    default_handler: python

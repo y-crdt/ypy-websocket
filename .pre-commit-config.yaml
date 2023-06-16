@@ -10,6 +10,7 @@ repos:
       - id: check-case-conflict
       - id: check-toml
       - id: check-yaml
+        exclude: mkdocs.yml
       - id: debug-statements
       - id: forbid-new-submodules
       - id: check-builtin-literals
