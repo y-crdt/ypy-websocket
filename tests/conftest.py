@@ -31,7 +31,7 @@ async def yws_server(request):
         kwargs = {}
     websocket_server = WebsocketServer(**kwargs)
     try:
-        async with serve(websocket_server.serve, "127.0.0.1", 1234), websocket_server:
+        async with websocket_server, serve(websocket_server.serve, "127.0.0.1", 1234):
             yield websocket_server
     except Exception:
         pass

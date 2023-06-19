@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from contextlib import AsyncExitStack
-from inspect import isawaitable
 from logging import Logger, getLogger
-from typing import Awaitable, cast
 
 from anyio import TASK_STATUS_IGNORED, Event, create_task_group
 from anyio.abc import TaskGroup, TaskStatus
@@ -18,6 +16,7 @@ class WebsocketServer:
     auto_clean_rooms: bool
     rooms: dict[str, YRoom]
     _started: Event | None
+    _starting: bool
     _task_group: TaskGroup | None
 
     def __init__(
@@ -48,6 +47,7 @@ class WebsocketServer:
         self.log = log or getLogger(__name__)
         self.rooms = {}
         self._started = None
+        self._starting = False
         self._task_group = None
 
     @property
@@ -57,8 +57,8 @@ class WebsocketServer:
             self._started = Event()
         return self._started
 
-    def get_room(self, name: str) -> YRoom | Awaitable[YRoom]:
-        """Get or create a room with the given name.
+    async def get_room(self, name: str) -> YRoom:
+        """Get or create a room with the given name, and start it.
 
         Arguments:
             name: The room name.
@@ -68,7 +68,23 @@ class WebsocketServer:
         """
         if name not in self.rooms.keys():
             self.rooms[name] = YRoom(ready=self.rooms_ready, log=self.log)
-        return self.rooms[name]
+        room = self.rooms[name]
+        await self.start_room(room)
+        return room
+
+    async def start_room(self, room: YRoom) -> None:
+        """Start a room, if not already started.
+
+        Arguments:
+            room: The room to start.
+        """
+        if self._task_group is None:
+            raise RuntimeError(
+                "The WebsocketServer is not running: use `async with websocket_server:` or `await websocket_server.start()`"
+            )
+
+        if not room.started.is_set():
+            await self._task_group.start(room.start)
 
     def get_room_name(self, room: YRoom) -> str:
         """Get the name of a room.
@@ -124,23 +140,17 @@ class WebsocketServer:
                 "The WebsocketServer is not running: use `async with websocket_server:` or `await websocket_server.start()`"
             )
 
-        await self._task_group.start(self._serve, websocket)
-
-    async def _serve(self, websocket, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
         async with create_task_group() as tg:
-            room = self.get_room(websocket.path)
-            if isawaitable(room):
-                room = await room
-            room = cast(YRoom, room)
-            if not room.started.is_set():
-                tg.start_soon(room.start)
-                await room.started.wait()
-            await room.serve(websocket)
+            tg.start_soon(self._serve, websocket, tg)
 
-            if self.auto_clean_rooms and not room.clients:
-                self.delete_room(room=room)
-            tg.cancel_scope.cancel()
-            task_status.started()
+    async def _serve(self, websocket: Websocket, tg: TaskGroup):
+        room = await self.get_room(websocket.path)
+        await self.start_room(room)
+        await room.serve(websocket)
+
+        if self.auto_clean_rooms and not room.clients:
+            self.delete_room(room=room)
+        tg.cancel_scope.cancel()
 
     async def __aenter__(self) -> WebsocketServer:
         if self._task_group is not None:
@@ -162,8 +172,17 @@ class WebsocketServer:
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
 
-    async def start(self) -> None:
-        """Start the WebSocket server."""
+    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
+        """Start the WebSocket server.
+
+        Arguments:
+            task_status: The status to set when the task has started.
+        """
+        if self._starting:
+            return
+        else:
+            self._starting = True
+
         if self._task_group is not None:
             raise RuntimeError("WebsocketServer already running")
 
@@ -171,6 +190,8 @@ class WebsocketServer:
         async with create_task_group() as self._task_group:
             self._task_group.start_soon(Event().wait)
             self.started.set()
+            self._starting = False
+            task_status.started()
 
     def stop(self) -> None:
         """Stop the WebSocket server."""

@@ -7,8 +7,13 @@ from logging import Logger, getLogger
 from typing import Awaitable, Callable
 
 import y_py as Y
-from anyio import Event, create_memory_object_stream, create_task_group
-from anyio.abc import TaskGroup
+from anyio import (
+    TASK_STATUS_IGNORED,
+    Event,
+    create_memory_object_stream,
+    create_task_group,
+)
+from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .awareness import Awareness
@@ -34,6 +39,7 @@ class YRoom:
     _ready: bool
     _task_group: TaskGroup | None
     _started: Event | None
+    _starting: bool
 
     def __init__(
         self, ready: bool = True, ystore: BaseYStore | None = None, log: Logger | None = None
@@ -70,6 +76,7 @@ class YRoom:
         self.clients = []
         self._on_message = None
         self._started = None
+        self._starting = False
         self._task_group = None
 
     @property
@@ -89,8 +96,9 @@ class YRoom:
 
     @ready.setter
     def ready(self, value: bool) -> None:
-        """Arguments:
-        value: True if the internal YDoc is ready to be synchronized, False otherwise."""
+        """
+        Arguments:
+            value: True if the internal YDoc is ready to be synchronized, False otherwise."""
         self._ready = value
         if value:
             self.ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
@@ -105,12 +113,16 @@ class YRoom:
 
     @on_message.setter
     def on_message(self, value: Callable[[bytes], Awaitable[bool] | bool] | None):
-        """Arguments:
-        value: An optional callback to call when a message is received. If the callback returns True, the message is skipped.
+        """
+        Arguments:
+            value: An optional callback to call when a message is received. If the callback returns True, the message is skipped.
         """
         self._on_message = value
 
     async def _broadcast_updates(self):
+        if self.ystore is not None and not self.ystore.started.is_set():
+            self._task_group.start_soon(self.ystore.start)
+
         async with self._update_receive_stream:
             async for update in self._update_receive_stream:
                 if self._task_group.cancel_scope.cancel_called:
@@ -146,14 +158,25 @@ class YRoom:
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
 
-    async def start(self):
-        """Start the room."""
+    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
+        """Start the room.
+
+        Arguments:
+            task_status: The status to set when the task has started.
+        """
+        if self._starting:
+            return
+        else:
+            self._starting = True
+
         if self._task_group is not None:
             raise RuntimeError("YRoom already running")
 
         async with create_task_group() as self._task_group:
             self._task_group.start_soon(self._broadcast_updates)
             self.started.set()
+            self._starting = False
+            task_status.started()
 
     def stop(self):
         """Stop the room."""
