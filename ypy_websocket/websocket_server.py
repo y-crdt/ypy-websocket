@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from inspect import isawaitable
 from logging import Logger, getLogger
+from typing import Awaitable, cast
 
 from anyio import TASK_STATUS_IGNORED, Event, create_task_group
 from anyio.abc import TaskGroup, TaskStatus
@@ -56,7 +57,7 @@ class WebsocketServer:
             self._started = Event()
         return self._started
 
-    def get_room(self, name: str) -> YRoom:
+    def get_room(self, name: str) -> YRoom | Awaitable[YRoom]:
         """Get or create a room with the given name.
 
         Arguments:
@@ -130,6 +131,7 @@ class WebsocketServer:
             room = self.get_room(websocket.path)
             if isawaitable(room):
                 room = await room
+            room = cast(YRoom, room)
             if not room.started.is_set():
                 tg.start_soon(room.start)
                 await room.started.wait()
