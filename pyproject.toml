@@ -31,6 +31,7 @@ dependencies = [
     "anyio >=3.6.2,<4",
     "aiosqlite >=0.18.0,<1",
     "y-py >=0.6.0,<0.7.0",
+    "typing_extensions; python_version < '3.8'",
 ]
 
 [project.optional-dependencies]
