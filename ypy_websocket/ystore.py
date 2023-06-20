@@ -13,8 +13,8 @@ from typing import AsyncIterator, Awaitable, Callable, cast
 import aiosqlite
 import anyio
 import y_py as Y
-from anyio import Event, Lock, create_task_group
-from anyio.abc import TaskGroup
+from anyio import TASK_STATUS_IGNORED, Event, Lock, create_task_group
+from anyio.abc import TaskGroup, TaskStatus
 
 from .yutils import Decoder, get_new_path, write_var_uint
 
@@ -28,6 +28,7 @@ class BaseYStore(ABC):
     metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None
     version = 2
     _started: Event | None = None
+    _starting: bool = False
     _task_group: TaskGroup | None = None
 
     @abstractmethod
@@ -70,12 +71,23 @@ class BaseYStore(ABC):
         self._task_group = None
         return await self._exit_stack.__aexit__(exc_type, exc_value, exc_tb)
 
-    async def start(self) -> None:
-        """Start the store."""
+    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
+        """Start the store.
+
+        Arguments:
+            task_status: The status to set when the task has started.
+        """
+        if self._starting:
+            return
+        else:
+            self._staring = True
+
         if self._task_group is not None:
             raise RuntimeError("YStore already running")
 
         self.started.set()
+        self._starting = False
+        task_status.started()
 
     def stop(self) -> None:
         """Stop the store."""
@@ -310,14 +322,25 @@ class SQLiteYStore(BaseYStore):
         self.lock = Lock()
         self.db_initialized = Event()
 
-    async def start(self) -> None:
-        """Start the SQLiteYStore."""
+    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
+        """Start the SQLiteYStore.
+
+        Arguments:
+            task_status: The status to set when the task has started.
+        """
+        if self._starting:
+            return
+        else:
+            self._starting = True
+
         if self._task_group is not None:
             raise RuntimeError("YStore already running")
 
         async with create_task_group() as self._task_group:
             self._task_group.start_soon(self._init_db)
             self.started.set()
+            self._starting = False
+            task_status.started()
 
     async def _init_db(self):
         create_db = False

@@ -5,8 +5,13 @@ from functools import partial
 from logging import Logger, getLogger
 
 import y_py as Y
-from anyio import Event, create_memory_object_stream, create_task_group
-from anyio.abc import TaskGroup
+from anyio import (
+    TASK_STATUS_IGNORED,
+    Event,
+    create_memory_object_stream,
+    create_task_group,
+)
+from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .websocket import Websocket
@@ -26,6 +31,7 @@ class WebsocketProvider:
     _update_send_stream: MemoryObjectSendStream
     _update_receive_stream: MemoryObjectReceiveStream
     _started: Event | None
+    _starting: bool
     _task_group: TaskGroup | None
 
     def __init__(self, ydoc: Y.YDoc, websocket: Websocket, log: Logger | None = None) -> None:
@@ -56,6 +62,7 @@ class WebsocketProvider:
             max_buffer_size=65536
         )
         self._started = None
+        self._starting = False
         self._task_group = None
         ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
@@ -103,14 +110,25 @@ class WebsocketProvider:
                 except Exception:
                     pass
 
-    async def start(self):
-        """Start the WebSocket provider."""
+    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
+        """Start the WebSocket provider.
+
+        Arguments:
+            task_status: The status to set when the task has started.
+        """
+        if self._starting:
+            return
+        else:
+            self._starting = True
+
         if self._task_group is not None:
             raise RuntimeError("WebsocketProvider already running")
 
         async with create_task_group() as self._task_group:
             self._task_group.start_soon(self._run)
             self.started.set()
+            self._starting = False
+            task_status.started()
 
     def stop(self):
         """Stop the WebSocket provider."""
