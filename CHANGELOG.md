@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.12.2
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.1...214b8365ccd38cd620e6f5b46d34354bdd3d8dbf))
+
+### Merged PRs
+
+- Pin anyio\<5 [#83](https://github.com/y-crdt/ypy-websocket/pull/83) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-06-20&to=2023-08-31&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-06-20..2023-08-31&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.12.1
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.0...930ec4956bea9954b7ce06acfa66629a0273736f))
@@ -15,8 +31,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-06-20&to=2023-06-20&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-06-20..2023-06-20&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.12.0
 
