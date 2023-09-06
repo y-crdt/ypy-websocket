@@ -37,6 +37,7 @@ nav:
   - reference/WebSocket_provider.md
   - reference/WebSocket_server.md
   - reference/ASGI_server.md
+  - reference/Channels_consumer.md
   - reference/WebSocket.md
   - reference/Room.md
   - reference/Store.md

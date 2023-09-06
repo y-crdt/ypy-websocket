@@ -4,7 +4,7 @@ from logging import getLogger
 from typing import TypedDict
 
 import y_py as Y
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer  # type: ignore
 
 from .websocket import Websocket
 from .yutils import YMessageType, process_sync_message, sync
@@ -37,16 +37,88 @@ class _WebsocketShim(Websocket):
 class ChannelsConsumer(AsyncWebsocketConsumer):
     """A working consumer for [Django Channels](https://github.com/django/channels).
 
-    Can be used out of the box with something like
+    This consumer can be used out of the box simply by adding
     ```py
-    path("ws/<str:room>", ChannelsConsumer.as_asgi()),
+    path("ws/<str:room>", ChannelsConsumer.as_asgi())
     ```
-    or subclassed to customize the behavior.
+    to your `urls.py` file. In practice, once you
+    [set up Channels](https://channels.readthedocs.io/en/1.x/getting-started.html),
+    you might have something like
+    ```py
+    # urls.py
+    from django.urls import path
+    from backend.consumer import DocConsumer, UpdateConsumer
+
+    urlpatterns = [
+        path("ws/<str:room>", ChannelsConsumer.as_asgi()),
+    ]
+
+    # asgi.py
+    import os
+    from channels.routing import ProtocolTypeRouter, URLRouter
+    from urls import urlpatterns
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
+
+    application = ProtocolTypeRouter({
+        "websocket": URLRouter(urlpatterns_ws),
+    })
+    ```
+
+    Additionally, the consumer can be subclassed to customize its behavior.
 
     In particular,
-    - Override `make_room_name` to customize the room name
-    - Override `make_ydoc` to initialize the YDoc
-      (useful to initialize it with data from your database, or to add observers to it).
+
+    - Override `make_room_name` to customize the room name.
+    - Override `make_ydoc` to initialize the YDod. This is useful to initialize it with data
+      from your database, or to add observers to it).
+    - Override `connect` to do custom validation (like auth) on connect,
+      but be sure to call `await super().connect()` in the end.
+    - Call `group_send_message` to send a message to an entire group/room.
+    - Call `send_message` to send a message to a single client, although this is not recommended.
+
+    A full example of a custom consumer showcasing all of these options is
+    ```py
+    import y_py as Y
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    from ypy_websocket.channels_consumer import ChannelsConsumer
+    from ypy_websocket.yutils import create_update_message
+
+
+    class DocConsumer(ChannelsConsumer):
+        def make_room_name(self) -> str:
+            # modify the room name here
+            return self.scope["url_route"]["kwargs"]["room"]
+
+        async def make_ydoc(self) -> Y.YDoc:
+            doc = Y.YDoc()
+            # fill doc with data from DB here
+            doc.observe_after_transaction(self.on_update_event)
+            return doc
+
+        async def connect(self):
+            user = self.scope["user"]
+            if user is None or user.is_anonymous:
+                await self.close()
+                return
+            await super().connect()
+
+        def on_update_event(self, event):
+            # process event here
+            ...
+
+        async def doc_update(self, update_wrapper):
+            update = update_wrapper["update"]
+            Y.apply_update(self.ydoc, update)
+            await self.group_send_message(create_update_message(update))
+
+
+    def send_doc_update(room_name, update):
+        layer = get_channel_layer()
+        async_to_sync(layer.group_send)(room_name, {"type": "doc_update", "update": update})
+    ```
+
     """
 
     def __init__(self):
@@ -98,11 +170,16 @@ class ChannelsConsumer(AsyncWebsocketConsumer):
         await self.group_send_message(bytes_data)
         if bytes_data[0] != YMessageType.SYNC:
             return
-        await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
+        await process_sync_message(
+            bytes_data[1:], self.ydoc, self._websocket_shim, logger
+        )
 
-    async def send_message(
-        self, message_wrapper: TypedDict("MessageWrapper", {"message": bytes})
-    ) -> None:
+    class WrappedMessage(TypedDict):
+        """A wrapped message to send to the client."""
+
+        message: bytes
+
+    async def send_message(self, message_wrapper: WrappedMessage) -> None:
         """Send a message to the client.
 
         Arguments:

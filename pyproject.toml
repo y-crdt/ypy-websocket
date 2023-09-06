@@ -30,7 +30,6 @@ classifiers = [
 dependencies = [
     "anyio >=3.6.2,<5",
     "aiosqlite >=0.18.0,<1",
-    "channels >=4.0.0,<5",
     "y-py >=0.6.0,<0.7.0",
     "typing_extensions; python_version < '3.8'",
 ]
@@ -48,6 +47,9 @@ docs = [
     "mkdocs",
     "mkdocs-material",
     "mkdocstrings-python",
+]
+channels = [
+  "channels",
 ]
 
 [project.urls]
