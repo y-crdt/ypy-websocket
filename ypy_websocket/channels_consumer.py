@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from logging import getLogger
+from typing import TypedDict
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 import y_py as Y
@@ -11,10 +12,9 @@ logger = getLogger(__name__)
 
 
 class _WebsocketShim(Websocket):
-    def __init__(self, path, room_name, channel_layer) -> None:
+    def __init__(self, path, send_func) -> None:
         self._path = path
-        self._room_name = room_name
-        self._channel_layer = channel_layer
+        self._send_func = send_func
 
     @property
     def path(self) -> str:
@@ -27,9 +27,7 @@ class _WebsocketShim(Websocket):
         raise NotImplementedError()
 
     async def send(self, message: bytes) -> None:
-        await self._channel_layer.group_send(
-            self._room_name, {"type": "_send_message", "message": message}
-        )
+        await self._send_func(message)
 
     async def recv(self) -> bytes:
         raise NotImplementedError()
@@ -78,7 +76,7 @@ class ChannelsConsumer(AsyncWebsocketConsumer):
         return Y.YDoc()
 
     def _make_websocket_shim(self, path: str) -> _WebsocketShim:
-        return _WebsocketShim(path, self.room_name, self.channel_layer)
+        return _WebsocketShim(path, self.group_send_message)
 
     async def connect(self) -> None:
         self.room_name = self.make_room_name()
@@ -94,11 +92,31 @@ class ChannelsConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
-        if bytes_data is None or bytes_data[0] != YMessageType.SYNC:
+        if bytes_data is None:
+            return
+        await self.group_send_message(bytes_data)
+        if bytes_data[0] != YMessageType.SYNC:
             return
         await process_sync_message(
             bytes_data[1:], self.ydoc, self._websocket_shim, logger
         )
 
-    async def _send_message(self, message_wrapper) -> None:
+    async def send_message(
+        self, message_wrapper: TypedDict("MessageWrapper", {"message": bytes})
+    ) -> None:
+        """Send a message to the client.
+
+        Arguments:
+            message_wrapper: The message to send, wrapped.
+        """
         await self.send(bytes_data=message_wrapper["message"])
+
+    async def group_send_message(self, message: bytes) -> None:
+        """Send a message to the group.
+
+        Arguments:
+            message: The message to send.
+        """
+        await self.channel_layer.group_send(
+            self.room_name, {"type": "send_message", "message": message}
+        )
