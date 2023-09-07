@@ -48,8 +48,8 @@ docs = [
     "mkdocs-material",
     "mkdocstrings-python",
 ]
-channels = [
-  "channels",
+django = [
+    "channels",
 ]
 
 [project.urls]

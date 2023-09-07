@@ -34,23 +34,23 @@ class _WebsocketShim(Websocket):
         raise NotImplementedError()
 
 
-class ChannelsConsumer(AsyncWebsocketConsumer):
+class YJSConsumer(AsyncWebsocketConsumer):
     """A working consumer for [Django Channels](https://github.com/django/channels).
 
-    This consumer can be used out of the box simply by adding
+    This consumer can be used out of the box simply by adding:
     ```py
-    path("ws/<str:room>", ChannelsConsumer.as_asgi())
+    path("ws/<str:room>", YJSConsumer.as_asgi())
     ```
     to your `urls.py` file. In practice, once you
     [set up Channels](https://channels.readthedocs.io/en/1.x/getting-started.html),
-    you might have something like
+    you might have something like:
     ```py
     # urls.py
     from django.urls import path
     from backend.consumer import DocConsumer, UpdateConsumer
 
     urlpatterns = [
-        path("ws/<str:room>", ChannelsConsumer.as_asgi()),
+        path("ws/<str:room>", YJSConsumer.as_asgi()),
     ]
 
     # asgi.py
@@ -70,23 +70,23 @@ class ChannelsConsumer(AsyncWebsocketConsumer):
     In particular,
 
     - Override `make_room_name` to customize the room name.
-    - Override `make_ydoc` to initialize the YDod. This is useful to initialize it with data
+    - Override `make_ydoc` to initialize the YDoc. This is useful to initialize it with data
       from your database, or to add observers to it).
     - Override `connect` to do custom validation (like auth) on connect,
       but be sure to call `await super().connect()` in the end.
     - Call `group_send_message` to send a message to an entire group/room.
     - Call `send_message` to send a message to a single client, although this is not recommended.
 
-    A full example of a custom consumer showcasing all of these options is
+    A full example of a custom consumer showcasing all of these options is:
     ```py
     import y_py as Y
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
-    from ypy_websocket.channels_consumer import ChannelsConsumer
+    from ypy_websocket.django_channels_consumer import YJSConsumer
     from ypy_websocket.yutils import create_update_message
 
 
-    class DocConsumer(ChannelsConsumer):
+    class DocConsumer(YJSConsumer):
         def make_room_name(self) -> str:
             # modify the room name here
             return self.scope["url_route"]["kwargs"]["room"]
@@ -170,9 +170,7 @@ class ChannelsConsumer(AsyncWebsocketConsumer):
         await self.group_send_message(bytes_data)
         if bytes_data[0] != YMessageType.SYNC:
             return
-        await process_sync_message(
-            bytes_data[1:], self.ydoc, self._websocket_shim, logger
-        )
+        await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
 
     class WrappedMessage(TypedDict):
         """A wrapped message to send to the client."""
