@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.12.3
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.2...18a479d012a880981e6d31d71269468abff75cfe))
+
+### Merged PRs
+
+- Add Django Channels consumer [#84](https://github.com/y-crdt/ypy-websocket/pull/84) ([@zswaff](https://github.com/zswaff))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-08-31&to=2023-09-07&type=c))
+
+[@zswaff](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Azswaff+updated%3A2023-08-31..2023-09-07&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.12.2
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.1...214b8365ccd38cd620e6f5b46d34354bdd3d8dbf))
@@ -15,8 +31,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-06-20&to=2023-08-31&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-06-20..2023-08-31&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.12.1
 
