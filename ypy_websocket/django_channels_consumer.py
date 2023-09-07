@@ -34,12 +34,12 @@ class _WebsocketShim(Websocket):
         raise NotImplementedError()
 
 
-class YJSConsumer(AsyncWebsocketConsumer):
+class YjsConsumer(AsyncWebsocketConsumer):
     """A working consumer for [Django Channels](https://github.com/django/channels).
 
     This consumer can be used out of the box simply by adding:
     ```py
-    path("ws/<str:room>", YJSConsumer.as_asgi())
+    path("ws/<str:room>", YjsConsumer.as_asgi())
     ```
     to your `urls.py` file. In practice, once you
     [set up Channels](https://channels.readthedocs.io/en/1.x/getting-started.html),
@@ -50,7 +50,7 @@ class YJSConsumer(AsyncWebsocketConsumer):
     from backend.consumer import DocConsumer, UpdateConsumer
 
     urlpatterns = [
-        path("ws/<str:room>", YJSConsumer.as_asgi()),
+        path("ws/<str:room>", YjsConsumer.as_asgi()),
     ]
 
     # asgi.py
@@ -82,11 +82,11 @@ class YJSConsumer(AsyncWebsocketConsumer):
     import y_py as Y
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
-    from ypy_websocket.django_channels_consumer import YJSConsumer
+    from ypy_websocket.django_channels_consumer import YjsConsumer
     from ypy_websocket.yutils import create_update_message
 
 
-    class DocConsumer(YJSConsumer):
+    class DocConsumer(YjsConsumer):
         def make_room_name(self) -> str:
             # modify the room name here
             return self.scope["url_route"]["kwargs"]["room"]

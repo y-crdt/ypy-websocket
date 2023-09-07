@@ -1,1 +1,1 @@
-::: ypy_websocket.django_channels_consumer.YJSConsumer
+::: ypy_websocket.django_channels_consumer.YjsConsumer
