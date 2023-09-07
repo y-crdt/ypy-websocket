@@ -111,6 +111,7 @@ class WebsocketProvider:
                 await process_sync_message(message[1:], self._ydoc, self._websocket, self.log)
                 if self._synced is not None:
                     self._synced.set()
+                    self._synced = None
 
     async def _send(self):
         async with self._update_receive_stream:
