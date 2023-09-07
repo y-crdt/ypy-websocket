@@ -48,6 +48,9 @@ docs = [
     "mkdocs-material",
     "mkdocstrings-python",
 ]
+django = [
+    "channels",
+]
 
 [project.urls]
 Homepage = "https://github.com/y-crdt/ypy-websocket"
