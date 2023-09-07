@@ -11,12 +11,17 @@ async def client():
     ydoc = Y.YDoc()
     async with (
         connect("ws://localhost:1234/my-roomname") as websocket,
-        WebsocketProvider(ydoc, websocket),
+        WebsocketProvider(ydoc, websocket) as provider,
     ):
+        ymap = ydoc.get_map("map")
+        
+        # Wait until we've received the initial state from the server.
+        await provider.synced.wait()
+        print(ymap.to_json())
+
         # Changes to remote ydoc are applied to local ydoc.
         # Changes to local ydoc are sent over the WebSocket and
         # broadcast to all clients.
-        ymap = ydoc.get_map("map")
         with ydoc.begin_transaction() as t:
             ymap.set(t, "key", "value")
 
