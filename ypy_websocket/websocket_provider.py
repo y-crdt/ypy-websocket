@@ -75,7 +75,7 @@ class WebsocketProvider:
         if self._started is None:
             self._started = Event()
         return self._started
-    
+
     @property
     def synced(self) -> Event:
         """An async event that is set when the WebSocket provider next syncs with the server."""
