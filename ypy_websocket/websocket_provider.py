@@ -17,6 +17,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from .websocket import Websocket
 from .yutils import (
     YMessageType,
+    YSyncMessageType,
     create_update_message,
     process_sync_message,
     put_updates,
@@ -77,7 +78,7 @@ class WebsocketProvider:
     
     @property
     def synced(self) -> Event:
-        """An async event that is set when the WebSocket provider has initially synced with the server."""
+        """An async event that is set when the WebSocket provider next syncs with the server."""
         if self._synced is None:
             self._synced = Event()
         return self._synced
@@ -109,7 +110,7 @@ class WebsocketProvider:
         async for message in self._websocket:
             if message[0] == YMessageType.SYNC:
                 await process_sync_message(message[1:], self._ydoc, self._websocket, self.log)
-                if self._synced is not None:
+                if message[1] == YSyncMessageType.SYNC_STEP2 and self._synced is not None:
                     self._synced.set()
                     self._synced = None
 
