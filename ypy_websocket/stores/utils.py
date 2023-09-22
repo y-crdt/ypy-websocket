@@ -1,0 +1,3 @@
+
+class YDocNotFound(Exception):
+    pass
