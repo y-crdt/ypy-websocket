@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import time
-import aiosqlite
 from logging import Logger, getLogger
 from typing import AsyncIterator, Awaitable, Callable
 
-
+import aiosqlite
 import anyio
+import y_py as Y
 from anyio import TASK_STATUS_IGNORED, Event, Lock, create_task_group
 from anyio.abc import TaskStatus
 
-import y_py as Y
-
 from ..yutils import get_new_path
 from .base_store import BaseYStore
-from .utils import YDocNotFound, DocExists
+from .utils import DocExists, YDocNotFound
+
 
 class SQLiteYStore(BaseYStore):
     """A YStore which uses an SQLite database.
@@ -77,7 +76,7 @@ class SQLiteYStore(BaseYStore):
         """
         if self.initialized or self._initialized is not None:
             return
-        self._initialized = Event() 
+        self._initialized = Event()
 
         async with self._lock:
             if await anyio.Path(self._store_path).exists():
@@ -85,23 +84,31 @@ class SQLiteYStore(BaseYStore):
                 async with aiosqlite.connect(self._store_path) as db:
                     cursor = await db.execute("pragma user_version")
                     version = (await cursor.fetchone())[0]
-                    
+
                 # The DB has an old version. Move the database.
                 if self.version != version:
                     new_path = await get_new_path(self._store_path)
-                    self.log.warning(f"YStore version mismatch, moving {self._store_path} to {new_path}")
+                    self.log.warning(
+                        f"YStore version mismatch, moving {self._store_path} to {new_path}"
+                    )
                     await anyio.Path(self._store_path).rename(new_path)
 
             # Make sure every table exists.
             async with aiosqlite.connect(self._store_path) as db:
-                await db.execute("CREATE TABLE IF NOT EXISTS documents (path TEXT PRIMARY KEY, version INTEGER NOT NULL)")
-                await db.execute("CREATE TABLE IF NOT EXISTS yupdates (path TEXT NOT NULL, yupdate BLOB, metadata BLOB, timestamp REAL NOT NULL)")
-                await db.execute("CREATE INDEX IF NOT EXISTS idx_yupdates_path_timestamp ON yupdates (path, timestamp)")
+                await db.execute(
+                    "CREATE TABLE IF NOT EXISTS documents (path TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+                )
+                await db.execute(
+                    "CREATE TABLE IF NOT EXISTS yupdates (path TEXT NOT NULL, yupdate BLOB, metadata BLOB, timestamp REAL NOT NULL)"
+                )
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_yupdates_path_timestamp ON yupdates (path, timestamp)"
+                )
                 await db.execute(f"PRAGMA user_version = {self.version}")
                 await db.commit()
-                
+
         self._initialized.set()
-    
+
     async def exists(self, path: str) -> bool:
         """
         Returns True if the document exists, else returns False.
@@ -115,9 +122,12 @@ class SQLiteYStore(BaseYStore):
 
         async with self._lock:
             async with aiosqlite.connect(self._store_path) as db:
-                cursor = await db.execute("SELECT path, version FROM documents WHERE path = ?", (path,),)
+                cursor = await db.execute(
+                    "SELECT path, version FROM documents WHERE path = ?",
+                    (path,),
+                )
                 return (await cursor.fetchone()) is not None
-    
+
     async def list(self) -> AsyncIterator[str]:
         """
         Returns a list with the name/path of the documents stored.
@@ -131,7 +141,7 @@ class SQLiteYStore(BaseYStore):
                 async with db.execute("SELECT path FROM documents") as cursor:
                     async for path in cursor:
                         yield path[0]
-    
+
     async def get(self, path: str) -> dict | None:
         """
         Returns the document's metadata or None if the document does't exist.
@@ -145,14 +155,17 @@ class SQLiteYStore(BaseYStore):
 
         async with self._lock:
             async with aiosqlite.connect(self._store_path) as db:
-                cursor = await db.execute("SELECT path, version FROM documents WHERE path = ?", (path,),)
+                cursor = await db.execute(
+                    "SELECT path, version FROM documents WHERE path = ?",
+                    (path,),
+                )
                 doc = await cursor.fetchone()
 
                 if doc is None:
                     return None
-                else :
+                else:
                     return dict(path=doc[0], version=doc[1])
-        
+
     async def create(self, path: str, version: int) -> None:
         """
         Creates a new document.
@@ -168,11 +181,14 @@ class SQLiteYStore(BaseYStore):
         async with self._lock:
             try:
                 async with aiosqlite.connect(self._store_path) as db:
-                    await db.execute("INSERT INTO documents VALUES (?, ?)", (path, version),)
+                    await db.execute(
+                        "INSERT INTO documents VALUES (?, ?)",
+                        (path, version),
+                    )
                     await db.commit()
             except aiosqlite.IntegrityError:
                 raise DocExists(f"The document {path} already exists.")
-    
+
     async def remove(self, path: str) -> None:
         """
         Removes a document.
@@ -186,8 +202,14 @@ class SQLiteYStore(BaseYStore):
 
         async with self._lock:
             async with aiosqlite.connect(self._store_path) as db:
-                await db.execute("DELETE FROM documents WHERE path = ?", (path,),)
-                await db.execute("DELETE FROM yupdates WHERE path = ?", (path,),)
+                await db.execute(
+                    "DELETE FROM documents WHERE path = ?",
+                    (path,),
+                )
+                await db.execute(
+                    "DELETE FROM yupdates WHERE path = ?",
+                    (path,),
+                )
                 await db.commit()
 
     async def read(self, path: str) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore

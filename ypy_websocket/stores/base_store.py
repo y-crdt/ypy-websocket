@@ -5,10 +5,9 @@ from contextlib import AsyncExitStack
 from inspect import isawaitable
 from typing import AsyncIterator, Awaitable, Callable, cast
 
+import y_py as Y
 from anyio import TASK_STATUS_IGNORED, Event, create_task_group
 from anyio.abc import TaskGroup, TaskStatus
-
-import y_py as Y
 
 
 class BaseYStore(ABC):
@@ -18,7 +17,7 @@ class BaseYStore(ABC):
 
     version = 2
     metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None
-    
+
     _store_path: str
     _initialized: Event | None = None
     _started: Event | None = None
@@ -55,14 +54,14 @@ class BaseYStore(ABC):
             path: The document name/path.
         """
         ...
-    
+
     @abstractmethod
     async def list(self) -> AsyncIterator[str]:
         """
         Returns a list with the name/path of the documents stored.
         """
         ...
-    
+
     @abstractmethod
     async def get(self, path: str) -> dict | None:
         """
@@ -72,7 +71,7 @@ class BaseYStore(ABC):
             path: The document name/path.
         """
         ...
-    
+
     @abstractmethod
     async def create(self, path: str, version: int) -> None:
         """
@@ -83,7 +82,7 @@ class BaseYStore(ABC):
             version: Document version.
         """
         ...
-    
+
     @abstractmethod
     async def remove(self, path: str) -> dict | None:
         """
@@ -93,7 +92,7 @@ class BaseYStore(ABC):
             path: The document name/path.
         """
         ...
-    
+
     @abstractmethod
     async def write(self, path: str, data: bytes) -> None:
         """
@@ -122,9 +121,9 @@ class BaseYStore(ABC):
     def initialized(self) -> bool:
         if self._initialized is not None:
             return self._initialized.is_set()
-        else :
+        else:
             return False
-    
+
     @property
     def started(self) -> Event:
         if self._started is None:

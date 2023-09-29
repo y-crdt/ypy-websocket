@@ -1,31 +1,30 @@
 from __future__ import annotations
 
-import time
 import struct
 import tempfile
+import time
 from logging import Logger, getLogger
 from pathlib import Path
 from typing import AsyncIterator, Awaitable, Callable
 
 import anyio
-from anyio import Lock
+from anyio import Event, Lock
+from deprecated import deprecated
 
-import y_py as Y
-
-from .yutils import Decoder, get_new_path, write_var_uint
+from ..yutils import Decoder, get_new_path, write_var_uint
 from .base_store import BaseYStore
-from .utils import YDocNotFound
+from .utils import DocExists, YDocNotFound
+
 
 class FileYStore(BaseYStore):
     """A YStore which uses one file per document."""
 
-    path: str
+    _lock: Lock
     metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None
-    lock: Lock
 
     def __init__(
         self,
-        path: str,
+        path: str = "./ystore",
         metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None,
         log: Logger | None = None,
     ) -> None:
@@ -36,56 +35,152 @@ class FileYStore(BaseYStore):
             metadata_callback: An optional callback to call to get the metadata.
             log: An optional logger.
         """
-        self.path = path
+        self._lock = Lock()
+        self._store_path = path
         self.metadata_callback = metadata_callback
         self.log = log or getLogger(__name__)
-        self.lock = Lock()
 
-    async def check_version(self) -> int:
-        """Check the version of the store format.
-
-        Returns:
-            The offset where the data is located in the file.
+    async def initialize(self) -> None:
         """
-        if not await anyio.Path(self.path).exists():
-            version_mismatch = True
+        Initializes the store.
+        """
+        if self.initialized or self._initialized is not None:
+            return
+        self._initialized = Event()
+
+        version_path = Path(self._store_path, "__version__")
+        if not await anyio.Path(self._store_path).exists():
+            await anyio.Path(self._store_path).mkdir(parents=True, exist_ok=True)
+
+        version = -1
+        create_version = False
+        if await anyio.Path(version_path).exists():
+            async with await anyio.open_file(version_path, "rb") as f:
+                version = int(await f.readline())
+
+                # Store version mismatch. Move store and create a new one.
+                if self.version != version:
+                    create_version = True
+
+            if create_version:
+                new_path = await get_new_path(self._store_path)
+                self.log.warning(
+                    f"YStore version mismatch, moving {self._store_path} to {new_path}"
+                )
+                await anyio.Path(self._store_path).rename(new_path)
+                await anyio.Path(self._store_path).mkdir(parents=True, exist_ok=True)
+
         else:
-            version_mismatch = False
-            move_file = False
-            async with await anyio.open_file(self.path, "rb") as f:
+            create_version = True
+
+        if create_version:
+            async with await anyio.open_file(version_path, "wb") as f:
+                version_bytes = str(self.version).encode()
+                await f.write(version_bytes)
+
+        self._initialized.set()
+
+    async def exists(self, path: str) -> bool:
+        """
+        Returns True if the document exists, else returns False.
+
+        Arguments:
+            path: The document name/path.
+        """
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        return await anyio.Path(self._get_document_path(path)).exists()
+
+    async def list(self) -> AsyncIterator[str]:
+        """
+        Returns a list with the name/path of the documents stored.
+        """
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        async for child in anyio.Path(self._store_path).glob("**/*.y"):
+            yield str(child.relative_to(self._store_path))
+
+    async def get(self, path: str) -> dict | None:
+        """
+        Returns the document's metadata or None if the document does't exist.
+
+        Arguments:
+            path: The document name/path.
+        """
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        file_path = self._get_document_path(path)
+        if not await anyio.Path(file_path).exists():
+            return None
+        else:
+            version = None
+            async with await anyio.open_file(file_path, "rb") as f:
                 header = await f.read(8)
                 if header == b"VERSION:":
                     version = int(await f.readline())
-                    if version == self.version:
-                        offset = await f.tell()
-                    else:
-                        version_mismatch = True
-                else:
-                    version_mismatch = True
-                if version_mismatch:
-                    move_file = True
-            if move_file:
-                new_path = await get_new_path(self.path)
-                self.log.warning(f"YStore version mismatch, moving {self.path} to {new_path}")
-                await anyio.Path(self.path).rename(new_path)
-        if version_mismatch:
-            async with await anyio.open_file(self.path, "wb") as f:
-                version_bytes = f"VERSION:{self.version}\n".encode()
-                await f.write(version_bytes)
-                offset = len(version_bytes)
-        return offset
 
-    async def read(self) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore
+                return dict(path=path, version=version)
+
+    async def create(self, path: str, version: int) -> None:
+        """
+        Creates a new document.
+
+        Arguments:
+            path: The document name/path.
+            version: Document version.
+        """
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        file_path = self._get_document_path(path)
+        if await anyio.Path(file_path).exists():
+            raise DocExists(f"The document {path} already exists.")
+
+        else:
+            await anyio.Path(file_path.parent).mkdir(parents=True, exist_ok=True)
+            async with await anyio.open_file(file_path, "wb") as f:
+                version_bytes = f"VERSION:{version}\n".encode()
+                await f.write(version_bytes)
+
+    async def remove(self, path: str) -> None:
+        """
+        Removes a document.
+
+        Arguments:
+            path: The document name/path.
+        """
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        file_path = self._get_document_path(path)
+        if await anyio.Path(file_path).exists():
+            await anyio.Path(file_path).unlink(missing_ok=False)
+
+    async def read(self, path: str) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore
         """Async iterator for reading the store content.
 
         Returns:
             A tuple of (update, metadata, timestamp) for each update.
         """
-        async with self.lock:
-            if not await anyio.Path(self.path).exists():
+        if self._initialized is None:
+            raise Exception("The store was not initialized.")
+        await self._initialized.wait()
+
+        async with self._lock:
+            file_path = self._get_document_path(path)
+            if not await anyio.Path(file_path).exists():
                 raise YDocNotFound
-            offset = await self.check_version()
-            async with await anyio.open_file(self.path, "rb") as f:
+
+            offset = await self._get_data_offset(file_path)
+            async with await anyio.open_file(file_path, "rb") as f:
                 await f.seek(offset)
                 data = await f.read()
                 if not data:
@@ -101,17 +196,18 @@ class FileYStore(BaseYStore):
                 yield update, metadata, timestamp
             i = (i + 1) % 3
 
-    async def write(self, data: bytes) -> None:
+    async def write(self, path: str, data: bytes) -> None:
         """Store an update.
 
         Arguments:
             data: The update to store.
         """
-        parent = Path(self.path).parent
-        async with self.lock:
-            await anyio.Path(parent).mkdir(parents=True, exist_ok=True)
-            await self.check_version()
-            async with await anyio.open_file(self.path, "ab") as f:
+        async with self._lock:
+            file_path = self._get_document_path(path)
+            if not await anyio.Path(file_path).exists():
+                raise YDocNotFound
+
+            async with await anyio.open_file(file_path, "ab") as f:
                 data_len = write_var_uint(len(data))
                 await f.write(data_len + data)
                 metadata = await self.get_metadata()
@@ -121,7 +217,24 @@ class FileYStore(BaseYStore):
                 timestamp_len = write_var_uint(len(timestamp))
                 await f.write(timestamp_len + timestamp)
 
+    async def _get_data_offset(self, path: Path) -> int:
+        try:
+            async with await anyio.open_file(path, "rb") as f:
+                header = await f.read(8)
+                if header == b"VERSION:":
+                    await f.readline()
+                    return await f.tell()
+                else:
+                    raise Exception
 
+        except Exception:
+            raise YDocNotFound(f"File {str(path)} not found.")
+
+    def _get_document_path(self, path: str) -> Path:
+        return Path(self._store_path, path + ".y")
+
+
+@deprecated
 class TempFileYStore(FileYStore):
     """
     A YStore which uses the system's temporary directory.
@@ -132,8 +245,17 @@ class TempFileYStore(FileYStore):
     class PrefixTempFileYStore(TempFileYStore):
         prefix_dir = "my_prefix_"
     ```
+
+    ## Note:
+    This class is deprecated. Use FileYStore and pass the tmp folder
+    as path argument. For example:
+
+    ```py
+    tmp_dir = tempfile.mkdtemp(prefix="prefix/directory/")
+    store = FileYStore(tmp_dir)
+    ```
     """
-    
+
     prefix_dir: str | None = None
     base_dir: str | None = None
 

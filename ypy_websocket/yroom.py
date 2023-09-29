@@ -17,8 +17,8 @@ from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .awareness import Awareness
-from .websocket import Websocket
 from .stores import BaseYStore
+from .websocket import Websocket
 from .yutils import (
     YMessageType,
     create_update_message,
