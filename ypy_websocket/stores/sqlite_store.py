@@ -83,7 +83,9 @@ class SQLiteYStore(BaseYStore):
                 version = -1
                 async with aiosqlite.connect(self._store_path) as db:
                     cursor = await db.execute("pragma user_version")
-                    version = (await cursor.fetchone())[0]
+                    row = await cursor.fetchone()
+                    if row is not None:
+                        version = row[0]
 
                 # The DB has an old version. Move the database.
                 if self.version != version:

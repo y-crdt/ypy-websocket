@@ -43,6 +43,7 @@ test = [
     "pytest-asyncio",
     "websockets >=10.0",
     "uvicorn",
+    "types-Deprecated"
 ]
 docs = [
     "mkdocs",

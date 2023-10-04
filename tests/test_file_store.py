@@ -24,7 +24,7 @@ def create_store():
 @pytest.fixture
 def add_document():
     async def _inner(path: str, doc_path: str, version: int, data: bytes = b"") -> None:
-        file_path = Path(path / (doc_path + ".y"))
+        file_path = Path(path, (doc_path + ".y"))
         await anyio.Path(file_path.parent).mkdir(parents=True, exist_ok=True)
 
         async with await anyio.open_file(file_path, "ab") as f:
