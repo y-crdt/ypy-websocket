@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.12.4
+
+([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.3...5e95afd99fcc5373591876f2023b975e18fad3cb))
+
+### Merged PRs
+
+- Fix \_staring -> \_starting [#87](https://github.com/y-crdt/ypy-websocket/pull/87) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-09-07&to=2023-10-04&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Adavidbrochart+updated%3A2023-09-07..2023-10-04&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.12.3
 
 ([Full Changelog](https://github.com/y-crdt/ypy-websocket/compare/v0.12.2...18a479d012a880981e6d31d71269468abff75cfe))
@@ -15,8 +31,6 @@
 ([GitHub contributors page for this release](https://github.com/y-crdt/ypy-websocket/graphs/contributors?from=2023-08-31&to=2023-09-07&type=c))
 
 [@zswaff](https://github.com/search?q=repo%3Ay-crdt%2Fypy-websocket+involves%3Azswaff+updated%3A2023-08-31..2023-09-07&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.12.2
 
