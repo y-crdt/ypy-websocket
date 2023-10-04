@@ -144,7 +144,7 @@ class SQLiteYStore(BaseYStore):
 
     async def get(self, path: str) -> dict | None:
         """
-        Returns the document's metadata or None if the document does't exist.
+        Returns the document's metadata and updates or None if the document does't exist.
 
         Arguments:
             path: The document name/path.
@@ -163,8 +163,11 @@ class SQLiteYStore(BaseYStore):
 
                 if doc is None:
                     return None
+                
                 else:
-                    return dict(path=doc[0], version=doc[1])
+                    cursor = await db.execute("SELECT yupdate, metadata, timestamp FROM yupdates WHERE path = ?", (path,),)
+                    updates = await cursor.fetchall()
+                    return dict(path=doc[0], version=doc[1], updates=updates)
 
     async def create(self, path: str, version: int) -> None:
         """

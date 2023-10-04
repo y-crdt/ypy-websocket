@@ -106,7 +106,7 @@ class FileYStore(BaseYStore):
 
     async def get(self, path: str) -> dict | None:
         """
-        Returns the document's metadata or None if the document does't exist.
+        Returns the document's metadata and updates or None if the document does't exist.
 
         Arguments:
             path: The document name/path.
@@ -124,8 +124,13 @@ class FileYStore(BaseYStore):
                 header = await f.read(8)
                 if header == b"VERSION:":
                     version = int(await f.readline())
-
-                return dict(path=path, version=version)
+                
+                data = await f.read()
+                updates = []
+                async for update, metadata, timestamp in self._decode_data(data):
+                    updates.append((update, metadata, timestamp))
+                
+                return dict(path=path, version=version, updates=updates)
 
     async def create(self, path: str, version: int) -> None:
         """
@@ -185,16 +190,9 @@ class FileYStore(BaseYStore):
                 data = await f.read()
                 if not data:
                     raise YDocNotFound
-        i = 0
-        for d in Decoder(data).read_messages():
-            if i == 0:
-                update = d
-            elif i == 1:
-                metadata = d
-            else:
-                timestamp = struct.unpack("<d", d)[0]
-                yield update, metadata, timestamp
-            i = (i + 1) % 3
+                
+        async for res in self._decode_data(data):
+            yield res
 
     async def write(self, path: str, data: bytes) -> None:
         """Store an update.
@@ -229,6 +227,18 @@ class FileYStore(BaseYStore):
 
         except Exception:
             raise YDocNotFound(f"File {str(path)} not found.")
+    
+    async def _decode_data(self, data) -> AsyncIterator[tuple[bytes, bytes, float]]:
+        i = 0
+        for d in Decoder(data).read_messages():
+            if i == 0:
+                update = d
+            elif i == 1:
+                metadata = d
+            else:
+                timestamp = struct.unpack("<d", d)[0]
+                yield update, metadata, timestamp
+            i = (i + 1) % 3
 
     def _get_document_path(self, path: str) -> Path:
         return Path(self._store_path, path + ".y")
