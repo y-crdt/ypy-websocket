@@ -80,7 +80,7 @@ class BaseYStore(ABC):
         if self._starting:
             return
         else:
-            self._staring = True
+            self._starting = True
 
         if self._task_group is not None:
             raise RuntimeError("YStore already running")
