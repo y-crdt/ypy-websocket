@@ -93,7 +93,7 @@ class FileYStore(BaseYStore):
 
         return await anyio.Path(self._get_document_path(path)).exists()
 
-    async def list(self) -> AsyncIterator[str]:
+    async def list(self) -> AsyncIterator[str]:  # type: ignore[override]
         """
         Returns a list with the name/path of the documents stored.
         """

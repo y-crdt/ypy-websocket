@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from logging import Logger, getLogger
-from typing import AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 import aiosqlite
 import anyio
@@ -130,7 +130,7 @@ class SQLiteYStore(BaseYStore):
                 )
                 return (await cursor.fetchone()) is not None
 
-    async def list(self) -> AsyncIterator[str]:
+    async def list(self) -> AsyncIterator[str]:  # type: ignore[override]
         """
         Returns a list with the name/path of the documents stored.
         """
@@ -166,7 +166,7 @@ class SQLiteYStore(BaseYStore):
                 if doc is None:
                     return None
 
-                list_updates = []
+                list_updates: Any = []
                 if updates:
                     cursor = await db.execute(
                         "SELECT yupdate, metadata, timestamp FROM yupdates WHERE path = ?",
