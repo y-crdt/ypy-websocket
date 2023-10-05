@@ -63,7 +63,7 @@ class BaseYStore(ABC):
         ...
 
     @abstractmethod
-    async def get(self, path: str) -> dict | None:
+    async def get(self, path: str, updates: bool = False) -> dict | None:
         """
         Returns the document's metadata or None if the document does't exist.
 
