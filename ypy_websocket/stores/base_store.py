@@ -15,7 +15,7 @@ class BaseYStore(ABC):
     Base class for the stores.
     """
 
-    version = 2
+    version = 3
     metadata_callback: Callable[[], Awaitable[bytes] | bytes] | None = None
 
     _store_path: str
