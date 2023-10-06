@@ -69,6 +69,7 @@ class BaseYStore(ABC):
 
         Arguments:
             path: The document name/path.
+            updates: Whether to return document's content or only the metadata.
         """
         ...
 

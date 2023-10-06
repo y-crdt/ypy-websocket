@@ -150,6 +150,7 @@ class SQLiteYStore(BaseYStore):
 
         Arguments:
             path: The document name/path.
+            updates: Whether to return document's content or only the metadata.
         """
         if self._initialized is None:
             raise Exception("The store was not initialized.")
