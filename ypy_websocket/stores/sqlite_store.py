@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from logging import Logger, getLogger
-from typing import AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, Iterable
 
 import aiosqlite
 import anyio
@@ -166,7 +166,7 @@ class SQLiteYStore(BaseYStore):
                 if doc is None:
                     return None
 
-                list_updates: list[tuple[bytes, bytes, float]] = []
+                list_updates: Iterable[Any] = []
                 if updates:
                     cursor = await db.execute(
                         "SELECT yupdate, metadata, timestamp FROM yupdates WHERE path = ?",
