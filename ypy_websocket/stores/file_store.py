@@ -125,7 +125,7 @@ class FileYStore(BaseYStore):
                 if header == b"VERSION:":
                     version = int(await f.readline())
 
-                list_updates = []
+                list_updates: list[tuple[bytes, bytes, float]] = []
                 if updates:
                     data = await f.read()
                     async for update, metadata, timestamp in self._decode_data(data):
