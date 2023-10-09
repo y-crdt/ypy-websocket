@@ -13,7 +13,7 @@ from deprecated import deprecated
 
 from ..yutils import Decoder, get_new_path, write_var_uint
 from .base_store import BaseYStore
-from .utils import DocExists, YDocNotFound
+from .utils import YDocExists, YDocNotFound
 
 
 class FileYStore(BaseYStore):
@@ -102,7 +102,7 @@ class FileYStore(BaseYStore):
         await self._initialized.wait()
 
         async for child in anyio.Path(self._store_path).glob("**/*.y"):
-            yield str(child.relative_to(self._store_path))
+            yield str(child.relative_to(self._store_path).with_suffix(""))
 
     async def get(self, path: str, updates: bool = False) -> dict | None:
         """
@@ -148,7 +148,7 @@ class FileYStore(BaseYStore):
 
         file_path = self._get_document_path(path)
         if await anyio.Path(file_path).exists():
-            raise DocExists(f"The document {path} already exists.")
+            raise YDocExists(f"The document {path} already exists.")
 
         else:
             await anyio.Path(file_path.parent).mkdir(parents=True, exist_ok=True)
@@ -170,6 +170,8 @@ class FileYStore(BaseYStore):
         file_path = self._get_document_path(path)
         if await anyio.Path(file_path).exists():
             await anyio.Path(file_path).unlink(missing_ok=False)
+        else:
+            raise YDocNotFound(f"The document {path} doesn't exists.")
 
     async def read(self, path: str) -> AsyncIterator[tuple[bytes, bytes, float]]:  # type: ignore
         """Async iterator for reading the store content.
@@ -246,7 +248,7 @@ class FileYStore(BaseYStore):
         return Path(self._store_path, path + ".y")
 
 
-@deprecated
+@deprecated(reason="Use FileYStore instead")
 class TempFileYStore(FileYStore):
     """
     A YStore which uses the system's temporary directory.

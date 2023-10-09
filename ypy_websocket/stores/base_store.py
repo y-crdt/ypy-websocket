@@ -32,7 +32,7 @@ class BaseYStore(ABC):
         Initialize the object.
 
         Arguments:
-            path: The path where the store will be located or the prefix for file-based stores.
+            path: The path where the store will be located.
             metadata_callback: An optional callback to call to get the metadata.
             log: An optional logger.
         """
@@ -122,8 +122,7 @@ class BaseYStore(ABC):
     def initialized(self) -> bool:
         if self._initialized is not None:
             return self._initialized.is_set()
-        else:
-            return False
+        return False
 
     @property
     def started(self) -> Event:

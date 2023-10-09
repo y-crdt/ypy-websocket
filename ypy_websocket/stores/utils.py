@@ -2,5 +2,5 @@ class YDocNotFound(Exception):
     pass
 
 
-class DocExists(Exception):
+class YDocExists(Exception):
     pass

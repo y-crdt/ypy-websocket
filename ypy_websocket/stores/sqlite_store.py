@@ -12,7 +12,7 @@ from anyio.abc import TaskStatus
 
 from ..yutils import get_new_path
 from .base_store import BaseYStore
-from .utils import DocExists, YDocNotFound
+from .utils import YDocExists, YDocNotFound
 
 
 class SQLiteYStore(BaseYStore):
@@ -198,7 +198,7 @@ class SQLiteYStore(BaseYStore):
                     )
                     await db.commit()
             except aiosqlite.IntegrityError:
-                raise DocExists(f"The document {path} already exists.")
+                raise YDocExists(f"The document {path} already exists.")
 
     async def remove(self, path: str) -> None:
         """
@@ -213,6 +213,13 @@ class SQLiteYStore(BaseYStore):
 
         async with self._lock:
             async with aiosqlite.connect(self._store_path) as db:
+                cursor = await db.execute(
+                    "SELECT path, version FROM documents WHERE path = ?",
+                    (path,),
+                )
+                if (await cursor.fetchone()) is None:
+                    raise YDocNotFound(f"The document {path} doesn't exists.")
+
                 await db.execute(
                     "DELETE FROM documents WHERE path = ?",
                     (path,),

@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import time
 
 import aiosqlite
 import pytest
 
-from ypy_websocket.stores import DocExists, SQLiteYStore
+from ypy_websocket.stores import SQLiteYStore, YDocExists, YDocNotFound
 
 
 @pytest.fixture
@@ -28,16 +30,17 @@ def create_database():
 
 @pytest.fixture
 def add_document():
-    async def _inner(path: str, doc_path: str, version: int, data: bytes = b"") -> None:
+    async def _inner(path: str, doc_path: str, version: int, data: bytes | None = None) -> None:
         async with aiosqlite.connect(path) as db:
             await db.execute(
                 "INSERT INTO documents VALUES (?, ?)",
                 (doc_path, version),
             )
-            await db.execute(
-                "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
-                (doc_path, data, b"", time.time()),
-            )
+            if data is not None:
+                await db.execute(
+                    "INSERT INTO yupdates VALUES (?, ?, ?, ?)",
+                    (doc_path, data, b"", time.time()),
+                )
             await db.commit()
 
     return _inner
@@ -52,22 +55,7 @@ async def test_initialization(tmp_path):
 
     assert store.initialized
 
-    async with aiosqlite.connect(path) as db:
-        cursor = await db.execute("pragma user_version")
-        version = (await cursor.fetchone())[0]
-        assert store.version == version
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
+    await _check_db(path, store)
 
 
 @pytest.mark.anyio
@@ -83,29 +71,14 @@ async def test_initialization_with_old_database(tmp_path, create_database):
 
     assert store.initialized
 
-    async with aiosqlite.connect(path) as db:
-        cursor = await db.execute("pragma user_version")
-        version = (await cursor.fetchone())[0]
-        assert store.version == version
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
+    await _check_db(path, store)
 
 
 @pytest.mark.anyio
 async def test_initialization_with_empty_database(tmp_path, create_database):
     path = tmp_path / "tmp.db"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version, False)
 
     store = SQLiteYStore(str(path))
@@ -114,22 +87,7 @@ async def test_initialization_with_empty_database(tmp_path, create_database):
 
     assert store.initialized
 
-    async with aiosqlite.connect(path) as db:
-        cursor = await db.execute("pragma user_version")
-        version = (await cursor.fetchone())[0]
-        assert store.version == version
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
+    await _check_db(path, store)
 
 
 @pytest.mark.anyio
@@ -137,7 +95,7 @@ async def test_initialization_with_existing_database(tmp_path, create_database, 
     path = tmp_path / "tmp.db"
     doc_path = "test.txt"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -147,30 +105,7 @@ async def test_initialization_with_existing_database(tmp_path, create_database, 
 
     assert store.initialized
 
-    async with aiosqlite.connect(path) as db:
-        cursor = await db.execute("pragma user_version")
-        version = (await cursor.fetchone())[0]
-        assert store.version == version
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
-
-        cursor = await db.execute(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
-        )
-        res = await cursor.fetchone()
-        assert res[0] == 1
-
-        cursor = await db.execute(
-            "SELECT path, version FROM documents WHERE path = ?",
-            (doc_path,),
-        )
-        res = await cursor.fetchone()
-        assert res[0] == doc_path
-        assert res[1] == 0
+    await _check_db(path, store, doc_path)
 
 
 @pytest.mark.anyio
@@ -223,7 +158,7 @@ async def test_get(tmp_path, create_database, add_document):
     path = tmp_path / "tmp.db"
     doc_path = "test.txt"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -246,7 +181,7 @@ async def test_create(tmp_path, create_database, add_document):
     path = tmp_path / "tmp.db"
     doc_path = "test.txt"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -267,7 +202,7 @@ async def test_create(tmp_path, create_database, add_document):
         assert res[0] == new_doc
         assert res[1] == 0
 
-    with pytest.raises(DocExists) as e:
+    with pytest.raises(YDocExists) as e:
         await store.create(doc_path, 0)
     assert str(e.value) == f"The document {doc_path} already exists."
 
@@ -277,7 +212,7 @@ async def test_remove(tmp_path, create_database, add_document):
     path = tmp_path / "tmp.db"
     doc_path = "test.txt"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -287,13 +222,15 @@ async def test_remove(tmp_path, create_database, add_document):
 
     assert store.initialized
 
+    assert await store.exists(doc_path)
     await store.remove(doc_path)
     assert not await store.exists(doc_path)
 
     new_doc = "new_doc.path"
     assert not await store.exists(new_doc)
-
-    await store.remove(new_doc)
+    with pytest.raises(YDocNotFound) as e:
+        await store.remove(new_doc)
+    assert str(e.value) == f"The document {new_doc} doesn't exists."
     assert not await store.exists(new_doc)
 
 
@@ -303,7 +240,7 @@ async def test_read(tmp_path, create_database, add_document):
     doc_path = "test.txt"
     update = b"foo"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0, update)
 
@@ -326,7 +263,7 @@ async def test_write(tmp_path, create_database, add_document):
     path = tmp_path / "tmp.db"
     doc_path = "test.txt"
 
-    # Create a database with an old version
+    # Create a database
     await create_database(path, SQLiteYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -344,6 +281,33 @@ async def test_write(tmp_path, create_database, add_document):
             count = 0
             async for u, in cursor:
                 count += 1
-                # The fixture add_document inserts an empty update
-                assert u in [b"", update]
-            assert count == 2
+                assert u == update
+            assert count == 1
+
+
+async def _check_db(path: str, store: SQLiteYStore, doc_path: str | None = None):
+    async with aiosqlite.connect(path) as db:
+        cursor = await db.execute("pragma user_version")
+        version = (await cursor.fetchone())[0]
+        assert store.version == version
+
+        cursor = await db.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
+        )
+        res = await cursor.fetchone()
+        assert res[0] == 1
+
+        cursor = await db.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
+        )
+        res = await cursor.fetchone()
+        assert res[0] == 1
+
+        if doc_path is not None:
+            cursor = await db.execute(
+                "SELECT path, version FROM documents WHERE path = ?",
+                (doc_path,),
+            )
+            res = await cursor.fetchone()
+            assert res[0] == doc_path
+            assert res[1] == 0

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import struct
 import time
 from pathlib import Path
@@ -5,7 +7,7 @@ from pathlib import Path
 import anyio
 import pytest
 
-from ypy_websocket.stores import DocExists, FileYStore
+from ypy_websocket.stores import FileYStore, YDocExists, YDocNotFound
 from ypy_websocket.yutils import Decoder, write_var_uint
 
 
@@ -23,21 +25,23 @@ def create_store():
 
 @pytest.fixture
 def add_document():
-    async def _inner(path: str, doc_path: str, version: int, data: bytes = b"") -> None:
+    async def _inner(path: str, doc_path: str, version: int, data: bytes | None = None) -> None:
         file_path = Path(path, (doc_path + ".y"))
         await anyio.Path(file_path.parent).mkdir(parents=True, exist_ok=True)
 
         async with await anyio.open_file(file_path, "ab") as f:
             version_bytes = f"VERSION:{version}\n".encode()
             await f.write(version_bytes)
-            data_len = write_var_uint(len(data))
-            await f.write(data_len + data)
-            metadata = b""
-            metadata_len = write_var_uint(len(metadata))
-            await f.write(metadata_len + metadata)
-            timestamp = struct.pack("<d", time.time())
-            timestamp_len = write_var_uint(len(timestamp))
-            await f.write(timestamp_len + timestamp)
+
+            if data is not None:
+                data_len = write_var_uint(len(data))
+                await f.write(data_len + data)
+                metadata = b""
+                metadata_len = write_var_uint(len(metadata))
+                await f.write(metadata_len + metadata)
+                timestamp = struct.pack("<d", time.time())
+                timestamp_len = write_var_uint(len(timestamp))
+                await f.write(timestamp_len + timestamp)
 
     return _inner
 
@@ -54,7 +58,7 @@ async def test_initialization(tmp_path):
     version_path = Path(path / "__version__")
     async with await anyio.open_file(version_path, "rb") as f:
         version = int(await f.readline())
-        assert FileYStore.version == version
+    assert FileYStore.version == version
 
 
 @pytest.mark.anyio
@@ -73,7 +77,7 @@ async def test_initialization_with_old_store(tmp_path, create_store):
     version_path = Path(path / "__version__")
     async with await anyio.open_file(version_path, "rb") as f:
         version = int(await f.readline())
-        assert FileYStore.version == version
+    assert FileYStore.version == version
 
 
 @pytest.mark.anyio
@@ -81,7 +85,7 @@ async def test_initialization_with_existing_store(tmp_path, create_store, add_do
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -105,7 +109,7 @@ async def test_exists(tmp_path, create_store, add_document):
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -140,7 +144,7 @@ async def test_list(tmp_path, create_store, add_document):
     count = 0
     async for doc in store.list():
         count += 1
-        # assert doc in [doc1, doc2]
+        assert doc in [doc1, doc2]
 
     assert count == 2
 
@@ -150,7 +154,7 @@ async def test_get(tmp_path, create_store, add_document):
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -173,7 +177,7 @@ async def test_create(tmp_path, create_store, add_document):
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -194,7 +198,7 @@ async def test_create(tmp_path, create_store, add_document):
         version = int(await f.readline())
         assert version == 0
 
-    with pytest.raises(DocExists) as e:
+    with pytest.raises(YDocExists) as e:
         await store.create(doc_path, 0)
     assert str(e.value) == f"The document {doc_path} already exists."
 
@@ -204,7 +208,7 @@ async def test_remove(tmp_path, create_store, add_document):
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -214,13 +218,15 @@ async def test_remove(tmp_path, create_store, add_document):
 
     assert store.initialized
 
+    assert await store.exists(doc_path)
     await store.remove(doc_path)
     assert not await store.exists(doc_path)
 
     new_doc = "new_doc.path"
     assert not await store.exists(new_doc)
-
-    await store.remove(new_doc)
+    with pytest.raises(YDocNotFound) as e:
+        await store.remove(new_doc)
+    assert str(e.value) == f"The document {new_doc} doesn't exists."
     assert not await store.exists(new_doc)
 
 
@@ -230,7 +236,7 @@ async def test_read(tmp_path, create_store, add_document):
     doc_path = "test.txt"
     update = b"foo"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0, update)
 
@@ -253,7 +259,7 @@ async def test_write(tmp_path, create_store, add_document):
     path = tmp_path / "tmp"
     doc_path = "test.txt"
 
-    # Create a store with an old version
+    # Create a store
     await create_store(path, FileYStore.version)
     await add_document(path, doc_path, 0)
 
@@ -281,8 +287,7 @@ async def test_write(tmp_path, create_store, add_document):
         for u in Decoder(data).read_messages():
             if i == 0:
                 count += 1
-                # The fixture add_document inserts an empty update
-                assert u in [b"", update]
+                assert u == update
             i = (i + 1) % 3
 
-        assert count == 2
+        assert count == 1
