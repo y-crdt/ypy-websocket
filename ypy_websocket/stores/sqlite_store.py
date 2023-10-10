@@ -7,8 +7,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Iterable
 import aiosqlite
 import anyio
 import y_py as Y
-from anyio import TASK_STATUS_IGNORED, Event, Lock, create_task_group
-from anyio.abc import TaskStatus
+from anyio import Event, Lock
 
 from ..yutils import get_new_path
 from .base_store import BaseYStore
