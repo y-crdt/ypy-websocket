@@ -102,7 +102,7 @@ class FileYStore(BaseYStore):
         await self._initialized.wait()
 
         async for child in anyio.Path(self._store_path).glob("**/*.y"):
-            yield str(child.relative_to(self._store_path).with_suffix(""))
+            yield child.relative_to(self._store_path).with_suffix("").as_posix()
 
     async def get(self, path: str, updates: bool = False) -> dict | None:
         """
