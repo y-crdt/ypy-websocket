@@ -50,7 +50,6 @@ def add_document():
 async def test_initialization(tmp_path):
     path = tmp_path / "tmp.db"
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -66,7 +65,6 @@ async def test_initialization_with_old_database(tmp_path, create_database):
     await create_database(path, 1)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -82,7 +80,6 @@ async def test_initialization_with_empty_database(tmp_path, create_database):
     await create_database(path, SQLiteYStore.version, False)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -100,7 +97,6 @@ async def test_initialization_with_existing_database(tmp_path, create_database, 
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -118,7 +114,6 @@ async def test_exists(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -140,7 +135,6 @@ async def test_list(tmp_path, create_database, add_document):
     await add_document(path, doc2, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -163,7 +157,6 @@ async def test_get(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -186,7 +179,6 @@ async def test_create(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -217,7 +209,6 @@ async def test_remove(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -245,7 +236,6 @@ async def test_read(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0, update)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -268,7 +258,6 @@ async def test_write(tmp_path, create_database, add_document):
     await add_document(path, doc_path, 0)
 
     store = SQLiteYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -288,20 +277,23 @@ async def test_write(tmp_path, create_database, add_document):
 async def _check_db(path: str, store: SQLiteYStore, doc_path: str | None = None):
     async with aiosqlite.connect(path) as db:
         cursor = await db.execute("pragma user_version")
-        version = (await cursor.fetchone())[0]
-        assert store.version == version
+        res = await cursor.fetchone()
+        assert res
+        assert store.version == res[0]
 
         cursor = await db.execute(
             "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='documents'"
         )
         res = await cursor.fetchone()
+        assert res
         assert res[0] == 1
 
         cursor = await db.execute(
             "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='yupdates'"
         )
         res = await cursor.fetchone()
-        assert res[0] == 1
+        assert res
+        assert res and res[0] == 1
 
         if doc_path is not None:
             cursor = await db.execute(
@@ -309,5 +301,6 @@ async def _check_db(path: str, store: SQLiteYStore, doc_path: str | None = None)
                 (doc_path,),
             )
             res = await cursor.fetchone()
+            assert res
             assert res[0] == doc_path
             assert res[1] == 0

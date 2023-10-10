@@ -51,25 +51,6 @@ class SQLiteYStore(BaseYStore):
         self.metadata_callback = metadata_callback
         self.log = log or getLogger(__name__)
 
-    async def start(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED):
-        """Start the SQLiteYStore.
-
-        Arguments:
-            task_status: The status to set when the task has started.
-        """
-        if self._starting:
-            return
-        else:
-            self._starting = True
-
-        if self._task_group is not None:
-            raise RuntimeError("YStore already running")
-
-        self._task_group = create_task_group()
-        self.started.set()
-        self._starting = False
-        task_status.started()
-
     async def initialize(self) -> None:
         """
         Initializes the store.

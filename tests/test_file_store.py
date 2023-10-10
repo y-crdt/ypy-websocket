@@ -50,7 +50,6 @@ def add_document():
 async def test_initialization(tmp_path):
     path = tmp_path / "tmp"
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -69,7 +68,6 @@ async def test_initialization_with_old_store(tmp_path, create_store):
     await create_store(path, 1)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -90,7 +88,6 @@ async def test_initialization_with_existing_store(tmp_path, create_store, add_do
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -114,7 +111,6 @@ async def test_exists(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -136,7 +132,6 @@ async def test_list(tmp_path, create_store, add_document):
     await add_document(path, doc2, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -159,7 +154,6 @@ async def test_get(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -182,7 +176,6 @@ async def test_create(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -213,7 +206,6 @@ async def test_remove(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -241,7 +233,6 @@ async def test_read(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0, update)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized
@@ -264,7 +255,6 @@ async def test_write(tmp_path, create_store, add_document):
     await add_document(path, doc_path, 0)
 
     store = FileYStore(str(path))
-    await store.start()
     await store.initialize()
 
     assert store.initialized

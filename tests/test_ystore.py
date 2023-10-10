@@ -33,7 +33,6 @@ async def test_ystore(tmp_path, YStore):
     doc_name = "my_doc.txt"
 
     ystore = YStore(str(store_path), metadata_callback=MetadataCallback())
-    await ystore.start()
     await ystore.initialize()
 
     await ystore.create(doc_name, 0)
@@ -61,7 +60,6 @@ async def test_document_ttl_sqlite_ystore(tmp_path, test_ydoc):
     doc_name = "my_doc.txt"
 
     ystore = MySQLiteYStore(str(store_path))
-    await ystore.start()
     await ystore.initialize()
 
     await ystore.create(doc_name, 0)
