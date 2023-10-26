@@ -1,31 +1,31 @@
 import json
 
 import pytest
-import y_py as Y
 from anyio import Event, create_task_group, move_on_after, sleep
+from pycrdt import Array, Doc, Map
 from websockets import connect  # type: ignore
 
 from ypy_websocket import WebsocketProvider
 
 
 class YTest:
-    def __init__(self, ydoc: Y.YDoc, timeout: float = 1.0):
+    def __init__(self, ydoc: Doc, timeout: float = 1.0):
         self.ydoc = ydoc
         self.timeout = timeout
-        self.ytest = ydoc.get_map("_test")
+        self.ytest = Map()
+        self.ydoc["_test"] = self.ytest
         self.clock = -1.0
 
     def run_clock(self):
         self.clock = max(self.clock, 0.0)
-        with self.ydoc.begin_transaction() as t:
-            self.ytest.set(t, "clock", self.clock)
+        self.ytest["clock"] = self.clock
 
     async def clock_run(self):
         change = Event()
 
         def callback(event):
             if "clock" in event.keys:
-                clk = self.ytest["clock"]
+                clk = event.keys["clock"]["newValue"]
                 if clk > self.clock:
                     self.clock = clk + 1.0
                     change.set()
@@ -41,16 +41,16 @@ class YTest:
 @pytest.mark.anyio
 @pytest.mark.parametrize("yjs_client", "0", indirect=True)
 async def test_ypy_yjs_0(yws_server, yjs_client):
-    ydoc = Y.YDoc()
+    ydoc = Doc()
     ytest = YTest(ydoc)
     async with connect("ws://127.0.0.1:1234/my-roomname") as websocket, WebsocketProvider(
         ydoc, websocket
     ):
-        ymap = ydoc.get_map("map")
+        ymap = Map()
+        ydoc["map"] = ymap
         # set a value in "in"
         for v_in in range(10):
-            with ydoc.begin_transaction() as t:
-                ymap.set(t, "in", float(v_in))
+            ymap["in"] = float(v_in)
             ytest.run_clock()
             await ytest.clock_run()
             v_out = ymap["out"]
@@ -73,7 +73,9 @@ async def test_ypy_yjs_1(yws_server, yjs_client):
     ytest = YTest(ydoc)
     ytest.run_clock()
     await ytest.clock_run()
-    ycells = ydoc.get_array("cells")
-    ystate = ydoc.get_map("state")
-    assert json.loads(ycells.to_json()) == [{"metadata": {"foo": "bar"}, "source": "1 + 2"}]
-    assert json.loads(ystate.to_json()) == {"state": {"dirty": False}}
+    ycells = Array()
+    ystate = Map()
+    ydoc["cells"] = ycells
+    ydoc["state"] = ystate
+    assert json.loads(str(ycells)) == [{"metadata": {"foo": "bar"}, "source": "1 + 2"}]
+    assert json.loads(str(ystate)) == {"state": {"dirty": False}}

@@ -1,7 +1,7 @@
 import pytest
 import uvicorn
-import y_py as Y
 from anyio import create_task_group, sleep
+from pycrdt import Doc, Map
 from websockets import connect  # type: ignore
 
 from ypy_websocket import ASGIServer, WebsocketProvider, WebsocketServer
@@ -22,23 +22,24 @@ async def test_asgi(unused_tcp_port):
 
         # clients
         # client 1
-        ydoc1 = Y.YDoc()
-        ymap1 = ydoc1.get_map("map")
-        with ydoc1.begin_transaction() as t:
-            ymap1.set(t, "key", "value")
+        ydoc1 = Doc()
+        ymap1 = Map()
+        ydoc1["map"] = ymap1
+        ymap1["key"] = "value"
         async with connect(
-            f"ws://localhost:{unused_tcp_port}/my-roomname"
+            f"ws://localhost:{unused_tcp_port}/my-roomname"  # noqa
         ) as websocket1, WebsocketProvider(ydoc1, websocket1):
             await sleep(0.1)
 
         # client 2
-        ydoc2 = Y.YDoc()
+        ydoc2 = Doc()
         async with connect(
-            f"ws://localhost:{unused_tcp_port}/my-roomname"
+            f"ws://localhost:{unused_tcp_port}/my-roomname"  # noqa
         ) as websocket2, WebsocketProvider(ydoc2, websocket2):
             await sleep(0.1)
 
-        ymap2 = ydoc2.get_map("map")
-        assert ymap2.to_json() == '{"key":"value"}'
+        ymap2 = Map()
+        ydoc2["map"] = ymap2
+        assert str(ymap2) == '{"key":"value"}'
 
         tg.cancel_scope.cancel()

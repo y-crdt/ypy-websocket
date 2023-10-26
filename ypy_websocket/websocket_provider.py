@@ -4,7 +4,6 @@ from contextlib import AsyncExitStack
 from functools import partial
 from logging import Logger, getLogger
 
-import y_py as Y
 from anyio import (
     TASK_STATUS_IGNORED,
     Event,
@@ -13,6 +12,7 @@ from anyio import (
 )
 from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from pycrdt import Doc
 
 from .websocket import Websocket
 from .yutils import (
@@ -27,14 +27,14 @@ from .yutils import (
 class WebsocketProvider:
     """WebSocket provider."""
 
-    _ydoc: Y.YDoc
+    _ydoc: Doc
     _update_send_stream: MemoryObjectSendStream
     _update_receive_stream: MemoryObjectReceiveStream
     _started: Event | None
     _starting: bool
     _task_group: TaskGroup | None
 
-    def __init__(self, ydoc: Y.YDoc, websocket: Websocket, log: Logger | None = None) -> None:
+    def __init__(self, ydoc: Doc, websocket: Websocket, log: Logger | None = None) -> None:
         """Initialize the object.
 
         The WebsocketProvider instance should preferably be used as an async context manager:
@@ -64,7 +64,7 @@ class WebsocketProvider:
         self._started = None
         self._starting = False
         self._task_group = None
-        ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
+        ydoc.observe(partial(put_updates, self._update_send_stream))
 
     @property
     def started(self) -> Event:

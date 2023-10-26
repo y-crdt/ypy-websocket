@@ -12,9 +12,9 @@ from typing import AsyncIterator, Awaitable, Callable, cast
 
 import aiosqlite
 import anyio
-import y_py as Y
 from anyio import TASK_STATUS_IGNORED, Event, Lock, create_task_group
 from anyio.abc import TaskGroup, TaskStatus
+from pycrdt import Doc
 
 from .yutils import Decoder, get_new_path, write_var_uint
 
@@ -111,23 +111,23 @@ class BaseYStore(ABC):
         metadata = cast(bytes, metadata)
         return metadata
 
-    async def encode_state_as_update(self, ydoc: Y.YDoc) -> None:
+    async def encode_state_as_update(self, ydoc: Doc) -> None:
         """Store a YDoc state.
 
         Arguments:
             ydoc: The YDoc from which to store the state.
         """
-        update = Y.encode_state_as_update(ydoc)  # type: ignore
+        update = ydoc.get_update()
         await self.write(update)
 
-    async def apply_updates(self, ydoc: Y.YDoc) -> None:
+    async def apply_updates(self, ydoc: Doc) -> None:
         """Apply all stored updates to the YDoc.
 
         Arguments:
             ydoc: The YDoc on which to apply the updates.
         """
         async for update, *rest in self.read():  # type: ignore
-            Y.apply_update(ydoc, update)  # type: ignore
+            ydoc.apply_update(update)
 
 
 class FileYStore(BaseYStore):
@@ -184,7 +184,7 @@ class FileYStore(BaseYStore):
                 await anyio.Path(self.path).rename(new_path)
         if version_mismatch:
             async with await anyio.open_file(self.path, "wb") as f:
-                version_bytes = f"VERSION:{self.version}\n".encode()
+                version_bytes = f"VERSION:{self.version}\n".encode()  # noqa
                 await f.write(version_bytes)
                 offset = len(version_bytes)
         return offset
@@ -421,16 +421,16 @@ class SQLiteYStore(BaseYStore):
 
                 if self.document_ttl is not None and diff > self.document_ttl:
                     # squash updates
-                    ydoc = Y.YDoc()
+                    ydoc = Doc()
                     async with db.execute(
                         "SELECT yupdate FROM yupdates WHERE path = ?", (self.path,)
                     ) as cursor:
                         async for update, in cursor:
-                            Y.apply_update(ydoc, update)
+                            ydoc.apply_update(update)
                     # delete history
                     await db.execute("DELETE FROM yupdates WHERE path = ?", (self.path,))
                     # insert squashed updates
-                    squashed_update = Y.encode_state_as_update(ydoc)
+                    squashed_update = ydoc.get_update()
                     metadata = await self.get_metadata()
                     await db.execute(
                         "INSERT INTO yupdates VALUES (?, ?, ?, ?)",

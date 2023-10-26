@@ -3,8 +3,8 @@ from __future__ import annotations
 from logging import getLogger
 from typing import TypedDict
 
-import y_py as Y
 from channels.generic.websocket import AsyncWebsocketConsumer  # type: ignore
+from pycrdt import Doc
 
 from .websocket import Websocket
 from .yutils import YMessageType, process_sync_message, sync
@@ -79,7 +79,7 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
     A full example of a custom consumer showcasing all of these options is:
     ```py
-    import y_py as Y
+    from pycrdt import Doc
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
     from ypy_websocket.django_channels_consumer import YjsConsumer
@@ -91,10 +91,10 @@ class YjsConsumer(AsyncWebsocketConsumer):
             # modify the room name here
             return self.scope["url_route"]["kwargs"]["room"]
 
-        async def make_ydoc(self) -> Y.YDoc:
-            doc = Y.YDoc()
+        async def make_ydoc(self) -> Doc:
+            doc = Doc()
             # fill doc with data from DB here
-            doc.observe_after_transaction(self.on_update_event)
+            doc.observe(self.on_update_event)
             return doc
 
         async def connect(self):
@@ -110,7 +110,7 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
         async def doc_update(self, update_wrapper):
             update = update_wrapper["update"]
-            Y.apply_update(self.ydoc, update)
+            self.ydoc.apply_update(update)
             await self.group_send_message(create_update_message(update))
 
 
@@ -137,7 +137,7 @@ class YjsConsumer(AsyncWebsocketConsumer):
         """
         return self.scope["url_route"]["kwargs"]["room"]
 
-    async def make_ydoc(self) -> Y.YDoc:
+    async def make_ydoc(self) -> Doc:
         """Make the YDoc for a new channel.
 
         Override to customize the YDoc when a channel is created
@@ -146,7 +146,7 @@ class YjsConsumer(AsyncWebsocketConsumer):
         Returns:
             The YDoc for a new channel. Defaults to a new empty YDoc.
         """
-        return Y.YDoc()
+        return Doc()
 
     def _make_websocket_shim(self, path: str) -> _WebsocketShim:
         return _WebsocketShim(path, self.group_send_message)

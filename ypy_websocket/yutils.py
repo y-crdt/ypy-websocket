@@ -4,8 +4,8 @@ from enum import IntEnum
 from pathlib import Path
 
 import anyio
-import y_py as Y
 from anyio.streams.memory import MemoryObjectSendStream
+from pycrdt import Doc, TransactionEvent
 
 
 class YMessageType(IntEnum):
@@ -97,14 +97,15 @@ class Decoder:
         return message.decode("utf-8")
 
 
-def put_updates(update_send_stream: MemoryObjectSendStream, event: Y.AfterTransactionEvent) -> None:
+def put_updates(update_send_stream: MemoryObjectSendStream, event: TransactionEvent) -> None:
     try:
-        update_send_stream.send_nowait(event.get_update())
+        update = event.get_update()  # type: ignore
+        update_send_stream.send_nowait(update)
     except Exception:
         pass
 
 
-async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> None:
+async def process_sync_message(message: bytes, ydoc: Doc, websocket, log) -> None:
     message_type = message[0]
     msg = message[1:]
     log.debug(
@@ -114,7 +115,7 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
     )
     if message_type == YSyncMessageType.SYNC_STEP1:
         state = read_message(msg)
-        update = Y.encode_state_as_update(ydoc, state)
+        update = ydoc.get_update(state)
         reply = create_sync_step2_message(update)
         log.debug(
             "Sending %s message to endpoint: %s",
@@ -129,11 +130,11 @@ async def process_sync_message(message: bytes, ydoc: Y.YDoc, websocket, log) -> 
         update = read_message(msg)
         # Ignore empty updates (see https://github.com/y-crdt/ypy/issues/98)
         if update != b"\x00\x00":
-            Y.apply_update(ydoc, update)
+            ydoc.apply_update(update)
 
 
-async def sync(ydoc: Y.YDoc, websocket, log):
-    state = Y.encode_state_vector(ydoc)
+async def sync(ydoc: Doc, websocket, log):
+    state = ydoc.get_state()
     msg = create_sync_step1_message(state)
     log.debug(
         "Sending %s message to endpoint: %s",

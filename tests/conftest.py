@@ -1,7 +1,7 @@
 import subprocess
 
 import pytest
-import y_py as Y
+from pycrdt import Array, Doc
 from websockets import serve  # type: ignore
 
 from ypy_websocket import WebsocketServer
@@ -9,17 +9,17 @@ from ypy_websocket import WebsocketServer
 
 class TestYDoc:
     def __init__(self):
-        self.ydoc = Y.YDoc()
-        self.array = self.ydoc.get_array("array")
+        self.ydoc = Doc()
+        self.array = Array()
+        self.ydoc["array"] = self.array
         self.state = None
         self.value = 0
 
     def update(self):
-        with self.ydoc.begin_transaction() as txn:
-            self.array.append(txn, self.value)
+        self.array.append(self.value)
         self.value += 1
-        update = Y.encode_state_as_update(self.ydoc, self.state)
-        self.state = Y.encode_state_vector(self.ydoc)
+        update = self.ydoc.get_update(self.state)
+        self.state = self.ydoc.get_state()
         return update
 
 

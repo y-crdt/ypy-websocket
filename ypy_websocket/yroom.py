@@ -6,7 +6,6 @@ from inspect import isawaitable
 from logging import Logger, getLogger
 from typing import Awaitable, Callable
 
-import y_py as Y
 from anyio import (
     TASK_STATUS_IGNORED,
     Event,
@@ -15,6 +14,7 @@ from anyio import (
 )
 from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from pycrdt import Doc
 
 from .awareness import Awareness
 from .websocket import Websocket
@@ -31,7 +31,7 @@ from .yutils import (
 class YRoom:
 
     clients: list
-    ydoc: Y.YDoc
+    ydoc: Doc
     ystore: BaseYStore | None
     _on_message: Callable[[bytes], Awaitable[bool] | bool] | None
     _update_send_stream: MemoryObjectSendStream
@@ -64,7 +64,7 @@ class YRoom:
             ystore: An optional store in which to persist document updates.
             log: An optional logger.
         """
-        self.ydoc = Y.YDoc()
+        self.ydoc = Doc()
         self.awareness = Awareness(self.ydoc)
         self._update_send_stream, self._update_receive_stream = create_memory_object_stream(
             max_buffer_size=65536
@@ -101,7 +101,7 @@ class YRoom:
             value: True if the internal YDoc is ready to be synchronized, False otherwise."""
         self._ready = value
         if value:
-            self.ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
+            self.ydoc.observe(partial(put_updates, self._update_send_stream))
 
     @property
     def on_message(self) -> Callable[[bytes], Awaitable[bool] | bool] | None:
