@@ -1,6 +1,6 @@
 # Ypy-websocket
 
-Ypy-websocket is an async WebSocket connector for Ypy.
+Ypy-websocket is an async WebSocket connector for [Ypy](https://github.com/y-crdt/ypy).
 
 [![Build Status](https://github.com/y-crdt/ypy-websocket/workflows/CI/badge.svg)](https://github.com/y-crdt/ypy-websocket/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
