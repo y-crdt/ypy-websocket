@@ -17,8 +17,8 @@ from anyio.abc import TaskGroup, TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from .awareness import Awareness
+from .stores import BaseYStore
 from .websocket import Websocket
-from .ystore import BaseYStore
 from .yutils import (
     YMessageType,
     create_update_message,
@@ -120,9 +120,6 @@ class YRoom:
         self._on_message = value
 
     async def _broadcast_updates(self):
-        if self.ystore is not None and not self.ystore.started.is_set():
-            self._task_group.start_soon(self.ystore.start)
-
         async with self._update_receive_stream:
             async for update in self._update_receive_stream:
                 if self._task_group.cancel_scope.cancel_called:
@@ -135,7 +132,7 @@ class YRoom:
                     self._task_group.start_soon(client.send, message)
                 if self.ystore:
                     self.log.debug("Writing Y update to YStore")
-                    self._task_group.start_soon(self.ystore.write, update)
+                    self._task_group.start_soon(self.ystore.write, client.path, update)
 
     async def __aenter__(self) -> YRoom:
         if self._task_group is not None:
