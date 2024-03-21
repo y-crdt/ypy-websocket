@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import TypedDict
+from typing import Optional, TypedDict
 
 import y_py as Y
-from channels.generic.websocket import AsyncWebsocketConsumer  # type: ignore
+from channels.generic.websocket import AsyncWebsocketConsumer
+
+from ypy_websocket.django_channels.yroom_storage import BaseYRoomStorage
 
 from ..websocket import Websocket
-from ..yutils import YMessageType, process_sync_message, sync
+from ..yutils import (
+    YMessageType,
+    YSyncMessageType,
+    process_sync_message,
+    read_message,
+    sync,
+)
 
 logger = getLogger(__name__)
 
@@ -123,9 +131,20 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
     def __init__(self):
         super().__init__()
-        self.room_name = None
-        self.ydoc = None
-        self._websocket_shim = None
+        self.room_name: Optional[str] = None
+        self.ydoc: Optional[Y.YDoc] = None
+        self.room_storage: Optional[BaseYRoomStorage] = None
+        self._websocket_shim: Optional[_WebsocketShim] = None
+
+    def make_room_storage(self) -> Optional[BaseYRoomStorage]:
+        """Make the room storage for a new channel.
+
+        Defaults to not using any (just broadcast updates between consumers).
+
+        Example:
+            self.room_storage = RedisYRoomStorage(self.room_name)
+        """
+        return None
 
     def make_room_name(self) -> str:
         """Make the room name for a new channel.
@@ -146,6 +165,9 @@ class YjsConsumer(AsyncWebsocketConsumer):
         Returns:
             The YDoc for a new channel. Defaults to a new empty YDoc.
         """
+        if self.room_storage:
+            return await self.room_storage.get_document()
+
         return Y.YDoc()
 
     def _make_websocket_shim(self, path: str) -> _WebsocketShim:
@@ -153,6 +175,8 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
     async def connect(self) -> None:
         self.room_name = self.make_room_name()
+        self.room_storage = self.make_room_storage()
+
         self.ydoc = await self.make_ydoc()
         self._websocket_shim = self._make_websocket_shim(self.scope["path"])
 
@@ -162,6 +186,9 @@ class YjsConsumer(AsyncWebsocketConsumer):
         await sync(self.ydoc, self._websocket_shim, logger)
 
     async def disconnect(self, code) -> None:
+        if self.room_storage:
+            await self.room_storage.close()
+
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
@@ -171,6 +198,16 @@ class YjsConsumer(AsyncWebsocketConsumer):
         await self.group_send_message(bytes_data)
 
         if bytes_data[0] != YMessageType.SYNC:
+            return
+
+        # If it's an update message, apply it to the storage document
+        if self.room_storage and bytes_data[1] == YSyncMessageType.SYNC_UPDATE:
+            update = read_message(bytes_data[2:])
+
+            # Ignore empty updates (see https://github.com/y-crdt/ypy/issues/98)
+            if update != b"\x00\x00":
+                await self.room_storage.update_document(update)
+
             return
 
         await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
