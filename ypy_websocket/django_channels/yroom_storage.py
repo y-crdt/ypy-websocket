@@ -6,6 +6,71 @@ import y_py as Y
 
 
 class BaseYRoomStorage:
+    """Base class for YRoom storage.
+
+    This class is responsible for storing, retrieving, updating and persisting the Ypy document.
+
+    Each Django Channels Consumer should have its own YRoomStorage instance, so each consumer is connected to the same document.
+
+    Updates to the document should be sent to the shared storage, instead of each consumer having its own version of the YDoc.
+
+    A full example of a Redis as temporary storage and Postgres as persistent storage is:
+
+    ```py
+    from typing import Optional
+
+    from django.db import models
+    from ypy_websocket.django_channels.yroom_storage import RedisYRoomStorage
+
+
+    class YDocSnapshotManager(models.Manager):
+        async def aget_snapshot(self, name) -> Optional[bytes]:
+            try:
+                instance: YDocSnapshot = await self.aget(name=name)
+                result = instance.data
+                if not isinstance(result, bytes):
+                    # Postgres on psycopg2 returns memoryview
+                    return bytes(result)
+
+            except YDocSnapshot.DoesNotExist:
+                return None
+            else:
+                return result
+
+        async def asave_snapshot(self, name, data):
+            return await self.aupdate_or_create(name=name, defaults={"data": data})
+
+
+    class YDocSnapshot(models.Model):
+        name = models.CharField(max_length=255, primary_key=True)
+        timestamp = models.DateTimeField(auto_now=True)
+        data = models.BinaryField()
+
+        objects = YDocSnapshotManager()
+
+        def __str__(self):
+            return self.name
+
+
+    class CustomRoomStorage(RedisYRoomStorage):
+        async def get_snapshot_from_database(self) -> Optional[bytes]:
+            return await YDocSnapshot.objects.aget_snapshot(self.room_name)
+
+        async def save_snapshot(self):
+            current_snapshot = await self.redis.get(self.redis_key)
+
+            if not current_snapshot:
+                return
+
+            await YDocSnapshot.objects.asave_snapshot(
+                self.room_name,
+                current_snapshot,
+            )
+
+    ```
+    """
+
+
     def __init__(self, room_name) -> None:
         self.room_name = room_name
 
@@ -15,7 +80,7 @@ class BaseYRoomStorage:
     async def get_document(self) -> Y.YDoc:
         """Gets the document from the storage.
 
-        Ideally it should be retrieved first from volatile storage (e.g. Redis) and then from
+        Ideally it should be retrieved first from temporary storage (e.g. Redis) and then from
         persistent storage (e.g. a database).
 
         Returns:
@@ -36,8 +101,8 @@ class BaseYRoomStorage:
 
         raise NotImplementedError
 
-    async def persist_document(self) -> None:
-        """Persists the document to the storage.
+    async def save_snapshot(self) -> None:
+        """Saves a snapshot of the document to the storage.
 
         If you need to persist the document to a database, you should do it here.
 
@@ -46,13 +111,13 @@ class BaseYRoomStorage:
 
         pass
 
-    async def debounced_persist_document(self) -> None:
-        """Persists the document to the storage, but debounced."""
+    async def debounced_save_snapshot(self) -> None:
+        """Saves a snapshot of the document to the storage, debouncing the calls."""
 
         if time.time() - self.last_saved_at <= self.debounce_seconds:
             return
 
-        await self.persist_document()
+        await self.save_snapshot()
 
         self.last_saved_at = time.time()
 
@@ -154,8 +219,8 @@ class RedisYRoomStorage(BaseYRoomStorage):
         finally:
             await self.redis.unwatch()
 
-        await self.debounced_persist_document()
+        await self.debounced_save_snapshot()
 
     async def close(self):
-        await self.persist_document()
+        await self.save_snapshot()
         await self.redis.close()
