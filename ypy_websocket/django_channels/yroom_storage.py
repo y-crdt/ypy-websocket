@@ -75,7 +75,7 @@ class BaseYRoomStorage:
         self.room_name = room_name
 
         self.last_saved_at = time.time()
-        self.debounce_seconds = 5
+        self.save_throttled_interval = 5
 
     async def get_document(self) -> Y.YDoc:
         """Gets the document from the storage.
@@ -111,10 +111,10 @@ class BaseYRoomStorage:
 
         pass
 
-    async def debounced_save_snapshot(self) -> None:
+    async def throttled_save_snapshot(self) -> None:
         """Saves a snapshot of the document to the storage, debouncing the calls."""
 
-        if time.time() - self.last_saved_at <= self.debounce_seconds:
+        if time.time() - self.last_saved_at <= self.save_throttled_interval:
             return
 
         await self.save_snapshot()
@@ -219,7 +219,7 @@ class RedisYRoomStorage(BaseYRoomStorage):
         finally:
             await self.redis.unwatch()
 
-        await self.debounced_save_snapshot()
+        await self.throttled_save_snapshot()
 
     async def close(self):
         await self.save_snapshot()
