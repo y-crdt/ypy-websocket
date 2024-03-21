@@ -167,9 +167,12 @@ class YjsConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data is None:
             return
+
         await self.group_send_message(bytes_data)
+
         if bytes_data[0] != YMessageType.SYNC:
             return
+
         await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
 
     class WrappedMessage(TypedDict):
