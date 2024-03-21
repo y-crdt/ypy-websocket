@@ -190,6 +190,9 @@ class YjsConsumer(AsyncWebsocketConsumer):
         if self.room_storage:
             await self.room_storage.close()
 
+        if not self.room_name:
+            return
+
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
