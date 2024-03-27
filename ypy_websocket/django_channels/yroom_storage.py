@@ -125,21 +125,6 @@ class BaseYRoomStorage:
 
         pass
 
-    def _apply_update_to_snapshot(self, document: Y.YDoc, update: bytes) -> bytes:
-        """Applies an update to a document snapshot.
-
-        Args:
-            document: The document snapshot to apply the update to.
-            update: The update to apply to the document.
-
-        Returns:
-            The updated document snapshot.
-        """
-
-        Y.apply_update(document, update)
-
-        return Y.encode_state_as_update(document)
-
 
 class RedisYRoomStorage(BaseYRoomStorage):
     """A YRoom storage that uses Redis as main storage, without
@@ -218,3 +203,8 @@ class RedisYRoomStorage(BaseYRoomStorage):
     async def close(self):
         await self.save_snapshot()
         await self.redis.close()
+
+    def _apply_update_to_snapshot(self, document: Y.YDoc, update: bytes) -> bytes:
+        Y.apply_update(document, update)
+
+        return Y.encode_state_as_update(document)
