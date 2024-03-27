@@ -4,10 +4,19 @@ from logging import getLogger
 from typing import TypedDict
 
 import y_py as Y
-from channels.generic.websocket import AsyncWebsocketConsumer  # type: ignore
+from channels.generic.websocket import AsyncWebsocketConsumer
 
-from .websocket import Websocket
-from .yutils import YMessageType, process_sync_message, sync
+from ypy_websocket.django_channels.yroom_storage import BaseYRoomStorage
+
+from ..websocket import Websocket
+from ..yutils import (
+    EMPTY_UPDATE,
+    YMessageType,
+    YSyncMessageType,
+    process_sync_message,
+    read_message,
+    sync,
+)
 
 logger = getLogger(__name__)
 
@@ -70,14 +79,17 @@ class YjsConsumer(AsyncWebsocketConsumer):
     In particular,
 
     - Override `make_room_name` to customize the room name.
-    - Override `make_ydoc` to initialize the YDoc. This is useful to initialize it with data
-      from your database, or to add observers to it).
+    - Override `make_room_storage` to initialize the room storage. Create your own storage class
+      by subclassing `BaseYRoomStorage` and implementing the methods.
     - Override `connect` to do custom validation (like auth) on connect,
       but be sure to call `await super().connect()` in the end.
     - Call `group_send_message` to send a message to an entire group/room.
     - Call `send_message` to send a message to a single client, although this is not recommended.
 
-    A full example of a custom consumer showcasing all of these options is:
+    A full example of a custom consumer showcasing all of these options is below. The example also
+    includes an example function `propagate_document_update_from_external` that demonstrates how to
+    send a message to all connected clients from an external source (like a Celery job).
+
     ```py
     import y_py as Y
     from asgiref.sync import async_to_sync
@@ -87,45 +99,57 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
 
     class DocConsumer(YjsConsumer):
-        def make_room_name(self) -> str:
-            # modify the room name here
-            return self.scope["url_route"]["kwargs"]["room"]
+        def make_room_storage(self) -> BaseYRoomStorage:
+            # Modify the room storage here
 
-        async def make_ydoc(self) -> Y.YDoc:
-            doc = Y.YDoc()
-            # fill doc with data from DB here
-            doc.observe_after_transaction(self.on_update_event)
-            return doc
+            return RedisYRoomStorage(self.room_name)
+
+        def make_room_name(self) -> str:
+            # Modify the room name here
+
+            return self.scope["url_route"]["kwargs"]["room"]
 
         async def connect(self):
             user = self.scope["user"]
+
             if user is None or user.is_anonymous:
                 await self.close()
                 return
+
             await super().connect()
 
-        def on_update_event(self, event):
-            # process event here
-            ...
-
-        async def doc_update(self, update_wrapper):
+        async def propagate_document_update(self, update_wrapper):
             update = update_wrapper["update"]
-            Y.apply_update(self.ydoc, update)
-            await self.group_send_message(create_update_message(update))
+
+            await self.send(create_update_message(update))
 
 
-    def send_doc_update(room_name, update):
-        layer = get_channel_layer()
-        async_to_sync(layer.group_send)(room_name, {"type": "doc_update", "update": update})
+    async def propagate_document_update_from_external(room_name, update):
+        channel_layer = get_channel_layer()
+
+        await channel_layer.group_send(
+            room_name,
+            {"type": "propagate_document_update", "update": update},
+        )
     ```
-
     """
 
     def __init__(self):
         super().__init__()
-        self.room_name = None
-        self.ydoc = None
-        self._websocket_shim = None
+        self.room_name: str | None = None
+        self.ydoc: Y.YDoc | None = None
+        self.room_storage: BaseYRoomStorage | None = None
+        self._websocket_shim: _WebsocketShim | None = None
+
+    def make_room_storage(self) -> BaseYRoomStorage | None:
+        """Make the room storage for a new channel to persist the YDoc permanently.
+
+        Defaults to not using any (just broadcast updates between consumers).
+
+        Example:
+            self.room_storage = RedisYRoomStorage(self.room_name)
+        """
+        return None
 
     def make_room_name(self) -> str:
         """Make the room name for a new channel.
@@ -137,15 +161,10 @@ class YjsConsumer(AsyncWebsocketConsumer):
         """
         return self.scope["url_route"]["kwargs"]["room"]
 
-    async def make_ydoc(self) -> Y.YDoc:
-        """Make the YDoc for a new channel.
+    async def _make_ydoc(self) -> Y.YDoc:
+        if self.room_storage:
+            return await self.room_storage.get_document()
 
-        Override to customize the YDoc when a channel is created
-        (useful to initialize it with data from your database, or to add observers to it).
-
-        Returns:
-            The YDoc for a new channel. Defaults to a new empty YDoc.
-        """
         return Y.YDoc()
 
     def _make_websocket_shim(self, path: str) -> _WebsocketShim:
@@ -153,7 +172,9 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
     async def connect(self) -> None:
         self.room_name = self.make_room_name()
-        self.ydoc = await self.make_ydoc()
+        self.room_storage = self.make_room_storage()
+
+        self.ydoc = await self._make_ydoc()
         self._websocket_shim = self._make_websocket_shim(self.scope["path"])
 
         await self.channel_layer.group_add(self.room_name, self.channel_name)
@@ -162,14 +183,32 @@ class YjsConsumer(AsyncWebsocketConsumer):
         await sync(self.ydoc, self._websocket_shim, logger)
 
     async def disconnect(self, code) -> None:
+        if self.room_storage:
+            await self.room_storage.close()
+
+        if not self.room_name:
+            return
+
         await self.channel_layer.group_discard(self.room_name, self.channel_name)
 
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data is None:
             return
+
         await self.group_send_message(bytes_data)
+
         if bytes_data[0] != YMessageType.SYNC:
             return
+
+        # If it's an update message, apply it to the storage document
+        if self.room_storage and bytes_data[1] == YSyncMessageType.SYNC_UPDATE:
+            update = read_message(bytes_data[2:])
+
+            if update != EMPTY_UPDATE:
+                await self.room_storage.update_document(update)
+
+            return
+
         await process_sync_message(bytes_data[1:], self.ydoc, self._websocket_shim, logger)
 
     class WrappedMessage(TypedDict):
