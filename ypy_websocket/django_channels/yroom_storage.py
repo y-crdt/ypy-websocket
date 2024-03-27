@@ -67,7 +67,7 @@ class BaseYRoomStorage:
     ```
     """
 
-    def __init__(self, room_name) -> None:
+    def __init__(self, room_name: str) -> None:
         self.room_name = room_name
 
         self.last_saved_at = time.time()
@@ -96,7 +96,6 @@ class BaseYRoomStorage:
         """
 
         raise NotImplementedError
-
 
     async def load_snapshot(self) -> Optional[bytes]:
         """Gets the document from the database. Override this method to
@@ -146,8 +145,8 @@ class RedisYRoomStorage(BaseYRoomStorage):
         room_name: The name of the room.
     """
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, room_name: str) -> None:
+        super().__init__(room_name)
 
         self.redis_key = f"document:{self.room_name}"
         self.redis = self.make_redis()
