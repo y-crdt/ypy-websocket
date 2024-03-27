@@ -10,7 +10,8 @@ class BaseYRoomStorage:
 
     This class is responsible for storing, retrieving, updating and persisting the Ypy document.
 
-    Each Django Channels Consumer should have its own YRoomStorage instance, so each consumer is connected to the same document.
+    Each Django Channels Consumer should have its own YRoomStorage instance, although all consumers
+    and rooms with the same room name will be connected to the same document in the end.
 
     Updates to the document should be sent to the shared storage, instead of each consumer having its own version of the YDoc.
 
@@ -43,13 +44,9 @@ class BaseYRoomStorage:
 
     class YDocSnapshot(models.Model):
         name = models.CharField(max_length=255, primary_key=True)
-        timestamp = models.DateTimeField(auto_now=True)
         data = models.BinaryField()
 
         objects = YDocSnapshotManager()
-
-        def __str__(self):
-            return self.name
 
 
     class CustomRoomStorage(RedisYRoomStorage):
@@ -74,7 +71,7 @@ class BaseYRoomStorage:
         self.room_name = room_name
 
         self.last_saved_at = time.time()
-        self.save_throttled_interval = 5
+        self.save_throttle_interval = 5
 
     async def get_document(self) -> Y.YDoc:
         """Gets the document from the storage.
@@ -113,7 +110,7 @@ class BaseYRoomStorage:
     async def throttled_save_snapshot(self) -> None:
         """Saves a snapshot of the document to the storage, debouncing the calls."""
 
-        if time.time() - self.last_saved_at <= self.save_throttled_interval:
+        if time.time() - self.last_saved_at <= self.save_throttle_interval:
             return
 
         await self.save_snapshot()

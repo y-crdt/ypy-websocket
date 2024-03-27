@@ -85,9 +85,10 @@ class YjsConsumer(AsyncWebsocketConsumer):
       but be sure to call `await super().connect()` in the end.
     - Call `group_send_message` to send a message to an entire group/room.
     - Call `send_message` to send a message to a single client, although this is not recommended.
-    - Call `propagate_document_update_from_external` to send a message to all connected clients from an external source (like a Celery job).
 
-    A full example of a custom consumer showcasing all of these options is:
+    A full example of a custom consumer showcasing all of these options is below. The example also
+    includes an example function `propagate_document_update_from_external` that demonstrates how to
+    send a message to all connected clients from an external source (like a Celery job).
 
     ```py
     import y_py as Y
@@ -141,8 +142,7 @@ class YjsConsumer(AsyncWebsocketConsumer):
         self._websocket_shim: _WebsocketShim | None = None
 
     def make_room_storage(self) -> BaseYRoomStorage | None:
-        """Make the room storage for a new channel to persist the YDoc after
-        the room has no more consumers.
+        """Make the room storage for a new channel to persist the YDoc permanently.
 
         Defaults to not using any (just broadcast updates between consumers).
 
