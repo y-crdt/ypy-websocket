@@ -50,7 +50,7 @@ class BaseYRoomStorage:
 
 
     class CustomRoomStorage(RedisYRoomStorage):
-        async def get_snapshot_from_database(self) -> Optional[bytes]:
+        async def load_snapshot(self) -> Optional[bytes]:
             return await YDocSnapshot.objects.aget_snapshot(self.room_name)
 
         async def save_snapshot(self):
@@ -96,6 +96,18 @@ class BaseYRoomStorage:
         """
 
         raise NotImplementedError
+
+
+    async def load_snapshot(self) -> Optional[bytes]:
+        """Gets the document from the database. Override this method to
+        implement a persistent storage.
+
+        Defaults to None.
+
+        Returns:
+            The latest document snapshot.
+        """
+        return None
 
     async def save_snapshot(self) -> None:
         """Saves a snapshot of the document to the storage.
@@ -151,7 +163,7 @@ class RedisYRoomStorage(BaseYRoomStorage):
         snapshot = await self.redis.get(self.redis_key)
 
         if not snapshot:
-            snapshot = await self.get_snapshot_from_database()
+            snapshot = await self.load_snapshot()
 
         document = Y.YDoc()
 
@@ -159,17 +171,6 @@ class RedisYRoomStorage(BaseYRoomStorage):
             Y.apply_update(document, snapshot)
 
         return document
-
-    async def get_snapshot_from_database(self) -> Optional[bytes]:
-        """Gets the document from the database. Override this method to
-        implement a persistent storage.
-
-        Defaults to None.
-
-        Returns:
-            (Optional) The document with the latest changes.
-        """
-        return None
 
     async def update_document(self, update: bytes):
         await self.redis.watch(self.redis_key)
