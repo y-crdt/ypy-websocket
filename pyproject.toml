@@ -51,6 +51,9 @@ docs = [
 django = [
     "channels",
 ]
+redis = [
+    "redis",
+]
 
 [project.urls]
 Homepage = "https://github.com/y-crdt/ypy-websocket"
