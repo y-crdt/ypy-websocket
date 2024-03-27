@@ -70,7 +70,6 @@ class BaseYRoomStorage:
     ```
     """
 
-
     def __init__(self, room_name) -> None:
         self.room_name = room_name
 
@@ -143,8 +142,6 @@ class BaseYRoomStorage:
         Y.apply_update(document, update)
 
         return Y.encode_state_as_update(document)
-
-
 
 
 class RedisYRoomStorage(BaseYRoomStorage):

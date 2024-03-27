@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from logging import getLogger
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 import y_py as Y
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -134,12 +134,12 @@ class YjsConsumer(AsyncWebsocketConsumer):
 
     def __init__(self):
         super().__init__()
-        self.room_name: Optional[str] = None
-        self.ydoc: Optional[Y.YDoc] = None
-        self.room_storage: Optional[BaseYRoomStorage] = None
-        self._websocket_shim: Optional[_WebsocketShim] = None
+        self.room_name: str | None = None
+        self.ydoc: Y.YDoc | None = None
+        self.room_storage: BaseYRoomStorage | None = None
+        self._websocket_shim: _WebsocketShim | None = None
 
-    def make_room_storage(self) -> Optional[BaseYRoomStorage]:
+    def make_room_storage(self) -> BaseYRoomStorage | None:
         """Make the room storage for a new channel to persist the YDoc after
         the room has no more consumers.
 
