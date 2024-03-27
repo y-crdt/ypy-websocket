@@ -13,7 +13,8 @@ class BaseYRoomStorage:
     Each Django Channels Consumer should have its own YRoomStorage instance, although all consumers
     and rooms with the same room name will be connected to the same document in the end.
 
-    Updates to the document should be sent to the shared storage, instead of each consumer having its own version of the YDoc.
+    Updates to the document should be sent to the shared storage, instead of each
+    consumer having its own version of the YDoc.
 
     A full example of a Redis as temporary storage and Postgres as persistent storage is:
 
