@@ -161,11 +161,6 @@ class YjsConsumer(AsyncWebsocketConsumer):
         return self.scope["url_route"]["kwargs"]["room"]
 
     async def _make_ydoc(self) -> Y.YDoc:
-        """Make the YDoc for a new channel.
-
-        Returns:
-            The YDoc for a new channel. Defaults to a new empty YDoc.
-        """
         if self.room_storage:
             return await self.room_storage.get_document()
 
