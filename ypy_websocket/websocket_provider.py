@@ -17,6 +17,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from .websocket import Websocket
 from .yutils import (
     YMessageType,
+    YSyncMessageType,
     create_update_message,
     process_sync_message,
     put_updates,
@@ -31,6 +32,7 @@ class WebsocketProvider:
     _update_send_stream: MemoryObjectSendStream
     _update_receive_stream: MemoryObjectReceiveStream
     _started: Event | None
+    _synced: Event | None
     _starting: bool
     _task_group: TaskGroup | None
 
@@ -63,6 +65,7 @@ class WebsocketProvider:
         )
         self._started = None
         self._starting = False
+        self._synced = None
         self._task_group = None
         ydoc.observe_after_transaction(partial(put_updates, self._update_send_stream))
 
@@ -72,6 +75,13 @@ class WebsocketProvider:
         if self._started is None:
             self._started = Event()
         return self._started
+
+    @property
+    def synced(self) -> Event:
+        """An async event that is set when the WebSocket provider next syncs with the server."""
+        if self._synced is None:
+            self._synced = Event()
+        return self._synced
 
     async def __aenter__(self) -> WebsocketProvider:
         if self._task_group is not None:
@@ -100,6 +110,9 @@ class WebsocketProvider:
         async for message in self._websocket:
             if message[0] == YMessageType.SYNC:
                 await process_sync_message(message[1:], self._ydoc, self._websocket, self.log)
+                if message[1] == YSyncMessageType.SYNC_STEP2 and self._synced is not None:
+                    self._synced.set()
+                    self._synced = None
 
     async def _send(self):
         async with self._update_receive_stream:
